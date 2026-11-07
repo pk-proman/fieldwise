@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy Fieldwise to a VPS that already runs nginx (e.g. the shared Hostinger server). Run from your Mac:
 #
-#   ./deploy/deploy.sh root@187.127.182.29 --domain fieldwise.promaninfi.com [--port 6002] [--email you@example.com] [--dir /opt/fieldwise] [--dry-run]
+#   ./deploy/deploy.sh root@187.127.182.29 --domain fieldwise.promaninfi.com [--port 8021] [--email you@example.com] [--dir /opt/fieldwise] [--dry-run]
 #
 # Before the first run: create a DNS A record for the domain pointing to the server (Cloudflare: DNS only / grey cloud).
 # What it does: copies the code (never your local database), creates /opt/fieldwise/.env ONCE with random secrets,
@@ -9,11 +9,11 @@
 # Let's Encrypt certificate. Other sites on the server are never touched. Re-running updates the code only; the
 # database and the .env on the server are kept.
 set -euo pipefail
-TARGET=""; DOMAIN=""; PORT="6002"; EMAIL=""; DIR="/opt/fieldwise"; DRY=0
+TARGET=""; DOMAIN=""; PORT="8021"; EMAIL=""; DIR="/opt/fieldwise"; DRY=0
 while [ $# -gt 0 ]; do case "$1" in
   --domain) DOMAIN="$2"; shift 2;; --port) PORT="$2"; shift 2;; --email) EMAIL="$2"; shift 2;;
   --dir) DIR="$2"; shift 2;; --dry-run) DRY=1; shift;; -*) echo "unknown option $1"; exit 1;; *) TARGET="$1"; shift;; esac; done
-[ -n "$TARGET" ] && [ -n "$DOMAIN" ] || { echo "usage: $0 user@host --domain fieldwise.example.com [--port 6002] [--email you@x.com] [--dir /opt/fieldwise] [--dry-run]"; exit 1; }
+[ -n "$TARGET" ] && [ -n "$DOMAIN" ] || { echo "usage: $0 user@host --domain fieldwise.example.com [--port 8021] [--email you@x.com] [--dir /opt/fieldwise] [--dry-run]"; exit 1; }
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 SSHO=(-o StrictHostKeyChecking=accept-new)
 run()  { echo "+ $*"; [ "$DRY" = 1 ] || "$@"; }
@@ -35,10 +35,15 @@ if [ ! -f .env ]; then
   { echo "ENV=production"; echo "SECRET_KEY=$(openssl rand -hex 32)"; echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"; } > .env; chmod 600 .env; echo "created .env with new random secrets"
 fi
 setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
-grep -q '^HOST_PORT=' .env || setenv HOST_PORT "$PORT"
+if ! grep -q '^HOST_PORT=' .env; then   # first deploy: the port must be free, otherwise stop before anything is started
+  if ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$PORT$" || docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":$PORT->"; then
+    echo "ERROR: port $PORT is already in use on this server. Re-run with --port <free port>. Ports in use:"; ss -ltn | awk 'NR>1{print $4}' | sed 's/.*://' | sort -n | uniq | tr '\n' ' '; echo; exit 1
+  fi
+  setenv HOST_PORT "$PORT"; echo "port $PORT is free - reserved for Fieldwise"
+fi
 setenv PUBLIC_URL "https://$DOMAIN"
 grep -q '^CORS_ORIGINS=' .env || setenv CORS_ORIGINS "capacitor://localhost,https://localhost,http://localhost"
-echo "HOST_PORT=$(grep '^HOST_PORT=' .env | cut -d= -f2)"; ss -ltn 2>/dev/null | grep -q ":$(grep '^HOST_PORT=' .env | cut -d= -f2) " && echo "WARNING: that port is already in use (fine if it is this app on a re-deploy)" || true
+echo "HOST_PORT=$(grep '^HOST_PORT=' .env | cut -d= -f2)"
 REMOTE
 
 rssh "cd $DIR && docker compose up -d --build"
