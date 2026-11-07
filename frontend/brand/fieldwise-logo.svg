@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 512" role="img" aria-label="Fieldwise - Field force and CRM">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f766e"/></linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5eead4" stop-opacity="0"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+  </defs>
+  <path d="M40 462 C130 418 210 486 292 446 S430 420 478 452" fill="none" stroke="url(#s)" stroke-width="12" stroke-linecap="round" stroke-dasharray="2 26"/>
+  <circle cx="478" cy="452" r="15" fill="#f59e0b"/>
+  <path d="M256 36C158 36 92 108 92 200c0 84 84 170 164 244 80-74 164-160 164-244C420 108 354 36 256 36z" fill="url(#g)"/>
+  <circle cx="256" cy="444" r="11" fill="#0f766e" opacity=".35"/>
+  <g transform="translate(257 200) scale(1.22) translate(-257 -200)"><g stroke="#fff" stroke-width="20" stroke-linecap="round" fill="none"><path d="M208 262V138"/><path d="M208 138H306"/><path d="M208 202H286"/></g>
+  <circle cx="208" cy="262" r="23" fill="#fff"/>
+  <g fill="#fbbf24" stroke="#fff" stroke-width="10"><circle cx="306" cy="138" r="22"/><circle cx="286" cy="202" r="22"/></g>
+  <circle cx="208" cy="262" r="9" fill="#0f766e"/></g>
+  <text x="540" y="262" font-family="Inter,'Segoe UI',Helvetica,Arial,sans-serif" font-size="150" font-weight="700" letter-spacing="-4" fill="#0b3b38">Field<tspan fill="#0f766e">wise</tspan></text>
+  <text x="546" y="340" font-family="Inter,'Segoe UI',Helvetica,Arial,sans-serif" font-size="40" font-weight="500" letter-spacing="9" fill="#5b6b6a">FIELD FORCE  ·  CRM</text>
+</svg>

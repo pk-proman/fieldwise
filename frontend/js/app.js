@@ -1,3 +1,4 @@
+import { LOGO_FULL, LOGO_COMPACT } from "./brand.js";
 import { get, post, session, setAuthLostHandler, queue } from "./api.js";
 import { $, $$, esc, toast, fail, svgIcon, fmtDT, skeleton, modal, debounce } from "./ui.js";
 import * as tracker from "./tracker.js";
@@ -133,7 +134,7 @@ function forgotModal() {
 function authScreen(mode = "login", msg = "") {
   const signup = mode === "signup";
   $("#app").innerHTML = `<div class="auth"><form class="card" id="authf" novalidate>
-    <div class="brand" style="padding:0 0 14px"><i>${svgIcon("pin").replace("<svg", '<svg style="width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2"')}</i> Fieldwise</div>
+    <div class="authlogo">${LOGO_FULL}</div>
     <h1>${signup ? "Create your workspace" : "Sign in"}</h1><p class="muted" style="margin:4px 0 16px">${signup ? "14-day trial · up to 10 users · no card needed" : "Field force, CRM and ERPNext in one place."}</p>
     ${msg ? `<div class="chip bad" style="display:block;margin-bottom:12px;padding:8px 10px;border-radius:8px">${esc(msg)}</div>` : ""}
     ${signup ? `<label class="f"><span>Company name</span><input name="company" required autocomplete="organization"></label><label class="f"><span>Your name</span><input name="name" required autocomplete="name"></label>
@@ -160,7 +161,7 @@ function authScreen(mode = "login", msg = "") {
 
 function shell() {
   const nav = ROUTES.filter(r => r.sec ? (!r.min || ROLE[S.user.role] >= ROLE[r.min]) : allowed(r));
-  $("#app").innerHTML = `<div class="shell"><aside class="side"><div class="brand"><i>${svgIcon("pin").replace("<svg", '<svg style="width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2"')}</i>Fieldwise</div>
+  $("#app").innerHTML = `<div class="shell"><aside class="side"><div class="brand sidelogo" aria-label="Fieldwise">${LOGO_COMPACT}</div>
     <nav class="nav" aria-label="Main">${nav.map(r => r.sec ? `<div class="sec">${r.sec}</div>` : `<a href="#/${r.p}" data-p="${r.p}">${svgIcon(r.i)}<span>${esc(r.t)}</span></a>`).join("")}</nav></aside>
     <div class="main"><header class="top"><span class="org">${esc(S.tenant.name)}</span><span class="net" id="net">● Online</span><span id="qn" class="small muted"></span>
       <div style="position:relative;flex:1;max-width:380px"><input id="gs" type="search" placeholder="Search leads, customers, mobile, email…" aria-label="Global search" autocomplete="off" style="min-height:34px"><div id="gsr" class="card" style="display:none;position:absolute;left:0;right:0;top:40px;max-height:60vh;overflow:auto;padding:6px;z-index:60"></div></div>

@@ -99,3 +99,8 @@ tbody tr:last-child td{border-bottom:0}tbody tr.click{cursor:pointer}tbody tr.cl
 
 .drawer{height:100vh;height:100dvh;max-height:100dvh}.drawer>.body{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.modal{overscroll-behavior:contain}
 .dot.no_gps{background:var(--info)}.dot.checked_out{background:var(--muted);opacity:.6}
+
+/* logo: wordmark colours follow the theme */
+.logo .w1{fill:var(--text)}.logo .w2{fill:var(--accent)}.logo .w3{fill:var(--muted)}
+.authlogo{margin:0 0 14px}.authlogo .logo{display:block;width:100%;max-width:300px;height:auto;margin:0 auto}
+.sidelogo{padding:2px 6px 12px}.sidelogo .logo{display:block;width:165px;height:auto}

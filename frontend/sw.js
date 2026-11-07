@@ -1,7 +1,7 @@
 // App-shell cache so the PWA opens offline; API calls are never cached (the app queues writes itself).
-const V = "fw-v7";
+const V = "fw-v8";
 const SHELL = ["/", "/static/css/app.css", "/static/js/app.js", "/static/js/api.js", "/static/js/ui.js", "/static/js/tracker.js",
-  "/static/js/pages-core.js", "/static/js/pages-crm.js", "/static/js/pages-hr.js", "/static/js/pages-admin.js", "/static/js/pages-sales.js", "/static/js/pages-orders.js", "/static/js/pages-beats.js", "/static/js/kit.js", "/static/js/pages-leads.js", "/static/js/pages-crm2.js", "/static/js/pages-ops.js", "/static/js/pages-settings2.js", "/static/js/pages-field.js", "/static/js/pages-settings3.js", "/static/icon.svg", "/static/icons/icon-192.png", "/static/icons/icon-512.png", "/manifest.webmanifest"];
+  "/static/js/pages-core.js", "/static/js/pages-crm.js", "/static/js/pages-hr.js", "/static/js/pages-admin.js", "/static/js/pages-sales.js", "/static/js/pages-orders.js", "/static/js/pages-beats.js", "/static/js/kit.js", "/static/js/pages-leads.js", "/static/js/pages-crm2.js", "/static/js/pages-ops.js", "/static/js/pages-settings2.js", "/static/js/pages-field.js", "/static/js/pages-settings3.js", "/static/js/brand.js", "/static/icon.svg", "/static/icons/icon-192.png", "/static/icons/icon-512.png", "/manifest.webmanifest"];
 // No skipWaiting here: a new version waits until the page asks for it, so the user is never switched mid-task.
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL).catch(() => {}))); });
 self.addEventListener("message", e => { if (e.data === "skip-waiting") self.skipWaiting(); });
