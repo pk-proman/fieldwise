@@ -1,0 +1,33 @@
+name: Mobile build
+on:
+  workflow_dispatch:
+  push:
+    paths: ["mobile/**", "frontend/**"]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm ci
+      - run: node scripts/build-www.mjs && npx cap sync android
+      - run: cd android && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with: { name: Fieldwise-debug-apk, path: mobile/android/app/build/outputs/apk/debug/app-debug.apk }
+  ios:
+    runs-on: macos-14
+    defaults: { run: { working-directory: mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: node scripts/build-www.mjs && npx cap sync ios
+      - name: Build for simulator (unsigned)
+        run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        with: { name: Fieldwise-ios-simulator-app, path: mobile/build/Build/Products/Debug-iphonesimulator/App.app }

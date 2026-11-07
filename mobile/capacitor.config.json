@@ -1,0 +1,20 @@
+{
+  "appId": "app.fieldwise.mobile",
+  "appName": "Fieldwise",
+  "webDir": "www",
+  "plugins": {
+    "BackgroundGeolocation": {},
+    "SplashScreen": {
+      "launchAutoHide": true
+    }
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

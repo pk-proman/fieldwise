@@ -1,0 +1,99 @@
+// Field-force pages: work hours & productivity, roster & swaps, announcements, form filling.
+import { get, post, put, del, qs, fileUrl } from "./api.js";
+import { $, $$, esc, toast, fail, money, fmtD, fmtDT, fmtT, today, table, wireTable, chip, statusKind, modal, confirmBox, fieldsHTML, readFields, validate, skeleton, makeMap, pinIcon, fileToDataURL, download } from "./ui.js";
+import { isMgr, isAdmin, cap } from "./kit.js";
+
+const hm = m => m == null ? "—" : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+const bar = (v, max, c = "var(--accent)") => `<div style="height:10px;background:var(--surface-2);border-radius:5px;min-width:70px"><div style="height:100%;width:${max ? Math.min(100, Math.max(2, v / max * 100)) : 0}%;background:${c};border-radius:5px"></div></div>`;
+const ANOM = { tracking_gap: ["No location signal", "warn"], teleport: ["Impossible jump", "bad"], mock_location: ["Fake GPS", "bad"], gps_off: ["GPS switched off", "warn"], attendance_flag: ["Attendance flag", "warn"], no_checkout: ["No check-out", "warn"], no_tracking: ["No tracking data", "bad"] };
+
+// ------------------------------------------------------------------ Work hours & productivity
+export async function workhours(root, S) {
+  const mgr = isMgr(S), users = await get("/users"); let tab = "day"; const cleanup = [];
+  root.innerHTML = `<div class="page-h"><h1>Work hours &amp; productivity</h1></div><div class="tabs"><button data-t="day">Day view</button>${mgr ? '<button data-t="prod">Productivity</button><button data-t="anom">Alerts &amp; anomalies</button><button data-t="geo">Arrivals &amp; departures</button>' : ""}</div><div id="pane">${skeleton(3)}</div>`;
+  const pane = $("#pane");
+  const show = async () => { cleanup.splice(0).forEach(f => f()); $$(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === tab)); pane.innerHTML = skeleton(3); try { await ({ day, prod, anom, geo })[tab](); } catch (e) { fail(e); } };
+  $$(".tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; show(); });
+  async function day() {
+    pane.innerHTML = `<div class="row" style="margin-bottom:10px"><input type="date" id="d" value="${today()}" style="width:auto">${mgr ? `<select id="u" style="width:auto">${users.map(u => `<option value="${u.id}" ${u.id === S.user.id ? "selected" : ""}>${esc(u.name)}</option>`).join("")}</select>` : ""}</div><div id="out">${skeleton(3)}</div>`;
+    const load = async () => { const r = await get("/field/day-summary" + qs({ day: $("#d").value, user_id: mgr ? $("#u").value : "" })); const out = $("#out");
+      if (!r.present) return out.innerHTML = `<div class="empty"><h3>No attendance that day</h3></div>`;
+      const tot = Math.max(1, r.span_min), seg = [["On site", r.on_site_min, "var(--ok)"], ["Travelling", r.travel_min, "var(--info)"], ["Idle / other stops", r.idle_min, "var(--warn)"], ["Branch", r.at_branch_min, "#98a2b3"], ["No signal", r.gap_min, "var(--danger)"]];
+      out.innerHTML = `<div class="grid g4 kpis" style="margin-bottom:12px">${[["Worked", hm(r.worked_min), r.shift.name + " shift " + r.shift.start + "–" + r.shift.end], ["Distance", r.distance_km + " km", `${r.points} GPS points`], ["Productive", r.productive_pct + "%", "time at customers"], ["Overtime", hm(r.overtime_min), "beyond shift end"]].map(([l, v, s]) => `<div class="card kpi"><div class="v" style="font-size:22px">${v}</div><div class="l">${l}<br>${esc(s)}</div></div>`).join("")}</div>
+        <div class="card" style="margin-bottom:12px"><h2>How the day was spent</h2><div style="display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--surface-2);margin:8px 0">${seg.map(([l, v, c]) => `<div title="${l}: ${hm(v)}" style="width:${v / tot * 100}%;background:${c}"></div>`).join("")}</div><div class="row small">${seg.map(([l, v, c]) => `<span><span class="dot" style="display:inline-block;background:${c};margin-right:4px"></span>${l} <b>${hm(v)}</b></span>`).join("")}</div></div>
+        <div class="grid g2"><div class="card"><h2>Stops</h2>${r.stops.length ? r.stops.map(s => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="chip ${s.kind === "customer" ? "ok" : s.kind === "branch" ? "" : "warn"}">${s.kind}</span><div class="grow"><b>${esc(s.place || "Unknown place")}</b><div class="small muted">${fmtT(s.start)}–${fmtT(s.end)}</div></div><b>${s.minutes} min</b></div>`).join("") : '<div class="muted">No stops of 8+ minutes.</div>'}</div>
+        <div class="card"><h2>Alerts</h2>${r.anomalies.length ? r.anomalies.map(a => `<div style="padding:6px 0;border-bottom:1px solid var(--border)">${chip((ANOM[a.type] || [a.type])[0], (ANOM[a.type] || [0, "warn"])[1])} <span class="small">${esc(a.detail)}</span></div>`).join("") : '<div class="muted">Nothing unusual.</div>'}</div></div><div class="card" style="padding:8px;margin-top:12px"><div id="map" class="map"></div></div>`;
+      const map = makeMap($("#map"), S.tenant.settings.map_style); if (map) { cleanup.push(() => map.remove()); r.stops.forEach((s, i) => L.marker([s.lat, s.lng], { icon: pinIcon(s.kind === "customer" ? "#067647" : s.kind === "branch" ? "#667085" : "#b54708", i + 1) }).addTo(map).bindPopup(`${esc(s.place || "Stop")}<br>${s.minutes} min`)); if (r.stops.length) map.fitBounds(r.stops.map(s => [s.lat, s.lng]), { padding: [40, 40], maxZoom: 15 }); } };
+    $("#d").onchange = () => load().catch(fail); $("#u")?.addEventListener("change", () => load().catch(fail)); await load(); }
+  async function prod() {
+    pane.innerHTML = `<div class="row" style="margin-bottom:10px"><input type="date" id="f" value="${new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10)}" style="width:auto"><span>to</span><input type="date" id="t" value="${today()}" style="width:auto"><button class="btn sm" id="go">Show</button><button class="btn sm" id="ex">Export CSV</button></div><div id="out">${skeleton(3)}</div>`; let rows = [];
+    const load = async () => { const r = await get("/field/productivity" + qs({ frm: $("#f").value, to: $("#t").value })); rows = r.rows; const mx = Math.max(1, ...rows.map(x => x.avg_worked_h));
+      $("#out").innerHTML = table([{ h: "Executive", f: x => `<strong>${esc(x.name)}</strong>${x.flagged ? ` <span class="chip bad" title="Fake-location or flagged days">⚑ ${x.flagged}</span>` : ""}` }, { h: "Days", f: x => x.days }, { h: "Late", f: x => x.late || "—" }, { h: "Avg hours", f: x => `${x.avg_worked_h}h ${bar(x.avg_worked_h, mx)}` }, { h: "Productive", f: x => `<b style="color:${x.productive_pct >= 40 ? "var(--ok)" : x.productive_pct >= 20 ? "var(--warn)" : "var(--danger)"}">${x.productive_pct}%</b>${bar(x.productive_pct, 100, "var(--ok)")}` },
+        { h: "Idle", f: x => `${x.idle_pct}%` }, { h: "On site", f: x => hm(x.on_site_min) }, { h: "Travel", f: x => hm(x.travel_min) }, { h: "Km", f: x => x.distance_km }, { h: "Customer stops", f: x => x.stops }, { h: "Visits", f: x => x.visits }, { h: "Overtime", f: x => hm(x.overtime_min) }, { h: "No signal", f: x => hm(x.gap_min) }], rows, { empty: "No attendance in this range." }); };
+    $("#go").onclick = () => load().catch(fail); $("#ex").onclick = () => download("productivity.csv", ["name,days,late,avg_hours,productive_pct,idle_pct,on_site_min,travel_min,km,customer_stops,visits,overtime_min,gap_min", ...rows.map(x => [x.name, x.days, x.late, x.avg_worked_h, x.productive_pct, x.idle_pct, x.on_site_min, x.travel_min, x.distance_km, x.stops, x.visits, x.overtime_min, x.gap_min].join(","))].join("\n")); await load(); }
+  async function anom() { const rows = await get("/field/anomalies");
+    pane.innerHTML = `<p class="muted small">Last 3 days: signal gaps over 30 minutes, impossible GPS jumps, fake-location points, missing check-outs and check-ins with no tracking.</p>` + table([{ h: "Day", f: x => fmtD(x.day) }, { h: "Executive", f: x => `<strong>${esc(x.user)}</strong>` }, { h: "Type", f: x => chip((ANOM[x.type] || [x.type])[0], (ANOM[x.type] || [0, "warn"])[1]) }, { h: "Detail", f: x => `<span class="small">${esc(x.detail)}</span>` }], rows, { empty: "No anomalies. Everyone's data looks clean." }); }
+  async function geo() { pane.innerHTML = `<div class="row" style="margin-bottom:10px"><input type="date" id="d" value="${today()}" style="width:auto"></div><div id="out">${skeleton(3)}</div>`;
+    const load = async () => { const rows = await get("/field/geo-events" + qs({ day: $("#d").value })); $("#out").innerHTML = table([{ h: "Time", f: x => fmtT(x.ts) }, { h: "Executive", f: x => `<strong>${esc(x.user_name)}</strong>` }, { h: "Event", f: x => chip({ arrive: "Arrived", depart: "Left", territory_exit: "Left territory", territory_enter: "Entered territory" }[x.kind], x.kind === "territory_exit" ? "bad" : x.kind === "arrive" ? "ok" : "") }, { h: "Place", f: x => esc(x.place || "—") }, { h: "Time on site", f: x => x.minutes != null ? x.minutes + " min" : "—" }], rows, { empty: "No arrivals or departures recorded for this day." }); };
+    $("#d").onchange = () => load().catch(fail); await load(); }
+  await show(); return () => cleanup.forEach(f => f());
+}
+
+// ------------------------------------------------------------------ Roster & swaps
+export async function roster(root, S) {
+  const mgr = isMgr(S), users = await get("/users"), shifts = await get("/field/shifts"); let week = null;
+  root.innerHTML = `<div class="page-h"><h1>Shift roster</h1><div class="right row"><button class="btn sm" id="pv">‹ Prev</button><b id="wk"></b><button class="btn sm" id="nx">Next ›</button><button class="btn" id="sw">Request a swap</button></div></div><div id="grid">${skeleton(3)}</div><h2 style="margin:18px 0 8px">Swap requests</h2><div id="swaps"></div>`;
+  const shift = d => { const x = new Date((week || today()) + "T00:00"); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); };
+  const load = async () => { const r = await get("/field/roster" + qs({ week })); week = r.week; $("#wk").textContent = `${fmtD(r.days[0])} – ${fmtD(r.days[6])}`;
+    $("#grid").innerHTML = `<div class="tablewrap"><table><thead><tr><th>Executive</th>${r.days.map(d => `<th>${new Date(d + "T00:00").toLocaleDateString([], { weekday: "short", day: "numeric" })}</th>`).join("")}</tr></thead><tbody>${r.rows.map(u => `<tr><td><strong>${esc(u.name)}</strong></td>${u.cells.map(c => `<td data-u="${u.user_id}" data-d="${c.day}" style="${mgr ? "cursor:pointer;" : ""}${c.off ? "background:var(--surface-2);" : ""}">${c.holiday ? `<div class="chip warn" title="${esc(c.holiday)}">Holiday</div>` : c.off ? '<span class="muted small">Off</span>' : `<div class="small"><b>${esc(c.shift)}</b><br>${c.start}–${c.end}</div>`}${c.override ? '<div class="small" style="color:var(--accent)">edited</div>' : ""}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    if (mgr) $$("td[data-u]", $("#grid")).forEach(td => td.onclick = () => modal({ title: `${r.rows.find(x => x.user_id == td.dataset.u).name} · ${fmtD(td.dataset.d)}`, body: `<label class="f"><span>Shift for this day</span><select id="rs"><option value="">Day off</option>${shifts.map(s => `<option value="${s.id}">${esc(s.name)} (${s.start}–${s.end})</option>`).join("")}</select></label>`,
+      actions: [{ label: "Back to default", onClick: async () => { await put("/field/roster", { user_id: +td.dataset.u, day: td.dataset.d, clear: true }); load(); } }, { label: "Cancel", close: true }, { label: "Save", primary: true, onClick: async el => { await put("/field/roster", { user_id: +td.dataset.u, day: td.dataset.d, shift_id: $("#rs", el).value ? +$("#rs", el).value : null }); toast("Roster updated."); load(); } }] })); };
+  const loadSwaps = async () => { const sw = await get("/field/swaps");
+    $("#swaps").innerHTML = table([{ h: "Day", f: x => fmtD(x.day) }, { h: "From", f: x => esc(x.from_name) }, { h: "With", f: x => esc(x.to_name) }, { h: "Reason", f: x => esc(x.reason) || "—" }, { h: "Status", f: x => chip(cap(x.status), statusKind(x.status === "approved" ? "approved" : x.status === "declined" || x.status === "rejected" ? "rejected" : "pending")) },
+      { h: "", f: x => (x.status === "requested" && x.to_user === S.user.id) ? `<button class="btn sm primary" data-a="${x.id}:1">Accept</button> <button class="btn sm" data-a="${x.id}:0">Decline</button>` : (x.status === "accepted" && mgr && x.from_user !== S.user.id && x.to_user !== S.user.id) ? `<button class="btn sm primary" data-a="${x.id}:1">Approve</button> <button class="btn sm danger" data-a="${x.id}:0">Reject</button>` : "" }], sw, { empty: "No swap requests." });
+    $$("[data-a]", $("#swaps")).forEach(b => b.onclick = async () => { const [id, a] = b.dataset.a.split(":"); try { await post(`/field/swaps/${id}/respond`, { accept: a === "1" }); toast("Done."); loadSwaps(); load(); } catch (e) { fail(e); } }); };
+  $("#pv").onclick = () => { week = shift(-7); load(); }; $("#nx").onclick = () => { week = shift(7); load(); };
+  $("#sw").onclick = () => { const f = [{ k: "with_user_id", label: "Swap with", type: "select", req: true, options: users.filter(u => u.id !== S.user.id).map(u => [u.id, u.name]) }, { k: "day", label: "Day", type: "date", req: true, def: shift(1 + (new Date().getDay() ? 0 : 0)) }, { k: "reason", label: "Reason", full: true }];
+    modal({ title: "Request a shift swap", body: fieldsHTML(f), actions: [{ label: "Cancel", close: true }, { label: "Send request", primary: true, onClick: async el => { validate(el, f); const d = readFields(el, f); await post("/field/swaps", { ...d, with_user_id: +d.with_user_id }); toast("Request sent. Your colleague and then a manager must agree."); loadSwaps(); } }] }); };
+  await Promise.all([load(), loadSwaps()]);
+}
+
+// ------------------------------------------------------------------ Announcements
+export async function announcements(root, S) {
+  const mgr = isMgr(S), users = mgr ? await get("/users") : [];
+  root.innerHTML = `<div class="page-h"><h1>Announcements</h1>${mgr ? '<div class="right"><button class="btn primary" id="new">+ Post announcement</button></div>' : ""}</div><div id="list">${skeleton(3)}</div>`;
+  const load = async () => { const rows = await get("/announcements");
+    $("#list").innerHTML = rows.length ? rows.map(a => `<div class="card" style="margin-bottom:10px;${a.unread ? "border-color:var(--accent)" : ""}"><div class="row">${a.pinned ? "📌" : ""}<h3>${esc(a.title)}</h3>${a.unread ? chip("new", "info") : ""}<span class="small muted right">${esc(a.author)} · ${fmtDT(a.created_at)}</span></div><div style="margin:6px 0;white-space:pre-wrap">${esc(a.body)}</div><div class="row small muted">${a.read_count != null ? `Read by ${a.read_count}` : ""}${a.unread ? `<button class="btn sm right" data-r="${a.id}">Got it</button>` : ""}${mgr && (a.created_by === S.user.id || isAdmin(S)) ? `<button class="btn sm danger right" data-x="${a.id}">Remove</button>` : ""}</div></div>`).join("") : `<div class="empty"><h3>No announcements</h3><p>Circulars and notices from management appear here.</p></div>`;
+    $$("[data-r]", $("#list")).forEach(b => b.onclick = async () => { await post(`/announcements/${b.dataset.r}/read`); load(); }); $$("[data-x]", $("#list")).forEach(b => b.onclick = async () => { if (await confirmBox("Remove announcement?", "It disappears for everyone.", "Remove", true)) { await del("/announcements/" + b.dataset.x); load(); } }); };
+  $("#new")?.addEventListener("click", () => { const f = [{ k: "title", label: "Title", req: true, full: true }, { k: "body", label: "Message", type: "textarea", full: true }, { k: "audience", label: "Send to", type: "select", options: [["all", "Everyone"], ["team", "My team"], ["users", "Selected people"]], def: "team" }, { k: "expires_in_days", label: "Show for (days)", type: "number", def: 14 }, { k: "pinned", label: "Pin to top", type: "checkbox" }];
+    const body = document.createElement("div"); body.innerHTML = fieldsHTML(f) + `<div class="f" id="pp" style="display:none"><span style="font-weight:550;font-size:13px">People</span><div class="row">${users.map(u => `<label class="small"><input type="checkbox" class="up" value="${u.id}"> ${esc(u.name)}</label>`).join("")}</div></div>`;
+    $("[name=audience]", body).onchange = e => $("#pp", body).style.display = e.target.value === "users" ? "block" : "none";
+    modal({ title: "Post announcement", body, wide: true, actions: [{ label: "Cancel", close: true }, { label: "Post", primary: true, onClick: async () => { validate(body, f); const d = readFields(body, f); d.user_ids = $$(".up:checked", body).map(i => +i.value); d.expires_in_days = d.expires_in_days || null; await post("/announcements", d); toast("Posted. People were notified."); load(); } }] }); });
+  await load();
+}
+
+// ------------------------------------------------------------------ Fill in a form (visit checklists, audits, surveys)
+export function signaturePad(host) {
+  host.innerHTML = `<canvas width="480" height="130" style="width:100%;border:1px dashed var(--border);border-radius:8px;background:#fff;touch-action:none"></canvas><button type="button" class="btn sm" data-clear>Clear</button>`;
+  const c = $("canvas", host), g = c.getContext("2d"); g.lineWidth = 2.2; g.lineCap = "round"; g.strokeStyle = "#101828"; let on = false, dirty = false;
+  const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+  c.onpointerdown = e => { on = dirty = true; g.beginPath(); g.moveTo(...pos(e)); c.setPointerCapture(e.pointerId); }; c.onpointermove = e => { if (on) { g.lineTo(...pos(e)); g.stroke(); } }; c.onpointerup = () => on = false;
+  $("[data-clear]", host).onclick = () => { g.clearRect(0, 0, c.width, c.height); dirty = false; };
+  return () => dirty ? c.toDataURL("image/png") : null;
+}
+export function fillForm(form, ctxIds, done) {
+  const body = document.createElement("div"), sigs = {};
+  body.innerHTML = form.fields.map(q => { const req = q.required ? " *" : ""; const l = `<span>${esc(q.label)}${req}</span>`;
+    if (q.type === "select") return `<label class="f">${l}<select data-k="${q.key}"><option value="">Select…</option>${q.options.map(o => `<option>${esc(o)}</option>`).join("")}</select></label>`;
+    if (q.type === "checkbox") return `<label class="f"><span><input type="checkbox" data-k="${q.key}"> ${esc(q.label)}${req}</span></label>`;
+    if (q.type === "rating") return `<div class="f">${l}<div class="row">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="r_${q.key}" data-k="${q.key}" value="${n}"> ${n}</label>`).join("")}</div></div>`;
+    if (q.type === "photo") return `<label class="f">${l}<input type="file" accept="image/*" capture="environment" data-k="${q.key}" data-photo></label>`;
+    if (q.type === "signature") return `<div class="f">${l}<div data-sig="${q.key}"></div></div>`;
+    return `<label class="f">${l}<input data-k="${q.key}" type="${q.type === "number" ? "number" : q.type === "date" ? "date" : "text"}" ${q.type === "number" ? 'step="any"' : ""}></label>`; }).join("");
+  $$("[data-sig]", body).forEach(h => sigs[h.dataset.sig] = signaturePad(h));
+  modal({ title: form.name, body, wide: true, actions: [{ label: "Cancel", close: true }, { label: "Submit", primary: true, onClick: async () => {
+    const data = {};
+    for (const q of form.fields) { if (q.type === "signature") { data[q.key] = sigs[q.key]() || ""; continue; } const el = $(`[data-k="${q.key}"]:checked`, body) || $(`[data-k="${q.key}"]`, body); if (!el) continue;
+      if (q.type === "checkbox") data[q.key] = el.checked; else if (q.type === "photo") data[q.key] = el.files?.[0] ? await fileToDataURL(el.files[0]) : ""; else if (q.type === "rating") data[q.key] = el.checked ? +el.value : ""; else data[q.key] = el.value; }
+    await post(`/forms/${form.id}/responses`, { ...ctxIds, data }); toast("Form submitted."); done?.(); } }] });
+}

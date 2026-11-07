@@ -1,0 +1,13 @@
+.git
+.env
+*.db
+*.db-shm
+*.db-wal
+**/__pycache__
+**/.venv
+backend/uploads
+backend/tests
+mobile
+deploy
+.github
+*.md
