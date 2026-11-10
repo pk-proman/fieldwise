@@ -12,11 +12,14 @@ from app.migrate import ensure_schema
 ensure_schema()  # creates the new table / columns on an older local database (production uses `alembic upgrade head`)
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--tenant", required=True, help="workspace slug")
+ap.add_argument("--tenant", help="workspace slug (omit to list the workspaces on this server)")
 ap.add_argument("--products")
 ap.add_argument("--sales-team")
 a = ap.parse_args()
 db = SessionLocal()
+if not a.tenant:
+    print("Workspaces on this server:", ", ".join(x.slug for x in db.scalars(select(Tenant))) or "(none yet: sign up first)")
+    raise SystemExit(0)
 t = db.scalar(select(Tenant).where(Tenant.slug == a.tenant))
 if not t:
     raise SystemExit(f"No workspace '{a.tenant}'.")
