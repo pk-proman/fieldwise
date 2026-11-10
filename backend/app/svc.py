@@ -122,6 +122,32 @@ def pick_owner(db, tenant, data: dict):
     return users_for[n % len(users_for)], False
 
 
+def sp_for_user(db, tenant_id: int, user_id):
+    """The sales-team entry tied to a login (or None)."""
+    from .models import SalesPerson
+    if not user_id:
+        return None
+    return db.scalar(select(SalesPerson).where(SalesPerson.tenant_id == tenant_id, SalesPerson.user_id == user_id, SalesPerson.deleted_at.is_(None)).order_by(SalesPerson.enabled.desc()).limit(1))
+
+
+def sync_owner_fields(db, tenant_id: int, data: dict):
+    """Keeps a lead's two owner fields consistent. Picking a sales-team member sets the owner to that person's login (none yet = unassigned
+    to a login, visible to managers); picking a user sets the matching sales-team member."""
+    from .models import SalesPerson
+    if "sales_person_id" in data:
+        sp = db.get(SalesPerson, int(data["sales_person_id"])) if data["sales_person_id"] else None
+        if sp and (sp.tenant_id != tenant_id or sp.deleted_at):
+            raise HTTPException(422, "Sales person not found.")
+        data["sales_person_id"] = sp.id if sp else None
+        data["owner_id"] = sp.user_id if sp else None
+    elif data.get("owner_id"):
+        sp = sp_for_user(db, tenant_id, data["owner_id"])
+        data["sales_person_id"] = sp.id if sp else None
+    elif "owner_id" in data:
+        data["sales_person_id"] = None
+    return data
+
+
 def find_duplicate_lead(db, tenant_id: int, phone: str, email: str):
     pk, em = phone_key(phone), (email or "").strip().lower()
     q = select(Lead).where(Lead.tenant_id == tenant_id, Lead.deleted_at.is_(None))
@@ -184,17 +210,28 @@ def create_lead_core(db, tenant, creator: User | None, data: dict, source: str =
         pr = db.get(Product, int(data["product_id"]))
     if not pr or pr.tenant_id != tenant.id:
         pr = match_product(db, tenant.id, data.get("product_text", "")) or unspecified_product(db, tenant.id)
-    owner, in_pool = (data.get("owner_id"), False) if data.get("owner_id") else pick_owner(db, tenant, {**data, "product_id": pr.id})
-    if not owner and not in_pool and creator:
-        owner = creator.id
+    sp_id = None
+    if data.get("sales_person_id"):
+        o = sync_owner_fields(db, tenant.id, {"sales_person_id": data["sales_person_id"]})
+        data = {**data, "owner_id": o["owner_id"]}
+        sp_id = o["sales_person_id"]
+        owner, in_pool = o["owner_id"], False
+    else:
+        owner, in_pool = (data.get("owner_id"), False) if data.get("owner_id") else pick_owner(db, tenant, {**data, "product_id": pr.id})
+        if not owner and not in_pool and creator:
+            owner = creator.id
+        sp = sp_for_user(db, tenant.id, owner)
+        sp_id = sp.id if sp else None
     lead = Lead(tenant_id=tenant.id, name=(data.get("name") or data.get("company") or phone or email)[:200], company=(data.get("company") or "")[:200], phone=phone[:40], email=(email or "")[:200],
                 source=(data.get("source") or source)[:60], status=entry_stage(tenant), value=float(data.get("value") or 0), owner_id=owner, city=(data.get("city") or "")[:100], country=(data.get("country") or "India")[:50],
                 notes=(data.get("notes") or "")[:2000], product_id=pr.id, region=(data.get("region") or data.get("state") or "")[:60], tags=data.get("tags") or ([] if pr.code != "UNSPEC" else ["needs-product"]),
-                in_pool=in_pool, source_ref=str(data.get("source_ref") or "")[:100], phone_key=phone_key(phone), stage_changed_at=utcnow(), event_id=data.get("event_id"),
+                in_pool=in_pool, sales_person_id=sp_id, source_ref=str(data.get("source_ref") or "")[:100], phone_key=phone_key(phone), stage_changed_at=utcnow(), event_id=data.get("event_id"),
                 temperature=data.get("temperature") if data.get("temperature") in ("hot", "warm", "cold") else "warm", custom=data.get("custom") or {})
     db.add(lead)
     db.flush()
     log_activity(db, tenant.id, "lead", lead.id, creator.id if creator else None, f"Lead created via {source} by {actor}." + (" Placed in the common lead pool." if in_pool else ""))
+    from . import qualifier
+    qualifier.qualify_new_lead(db, tenant, lead, data.get("product_text", ""))  # automation: every new lead is scored and the reasoning is added as a remark
     days = int((tenant.settings or {}).get("auto_followup_days", 1) or 0)
     if days > 0 and owner:
         due = (utcnow() + __import__("datetime").timedelta(days=days)).replace(hour=5, minute=0, second=0, microsecond=0)

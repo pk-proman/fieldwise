@@ -28,7 +28,7 @@ def get_cfg(ctx: Ctx = Depends(require("admin"))):
 def put_cfg(body: dict, ctx: Ctx = Depends(require("admin"))):
     s = dict(ctx.tenant.settings or {})
     cur = dict(s.get("erpnext") or {})
-    for k in ("enabled", "url", "api_key", "company", "payable_account", "expense_approver"):
+    for k in ("enabled", "url", "api_key", "company", "payable_account", "expense_approver", "item_group"):
         if k in body:
             cur[k] = body[k]
     cur.pop("api_secret", None)  # never keep the secret in the settings JSON

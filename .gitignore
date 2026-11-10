@@ -19,3 +19,6 @@ mobile/ios/App/Pods/
 .DS_Store
 *.log
 .pytest_cache/
+
+# data pulled from the live ERPNext (company data / personal data) - never commit
+backend/seed/

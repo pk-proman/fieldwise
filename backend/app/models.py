@@ -215,6 +215,25 @@ class Lead(TenantMixin, Base):
     in_pool: Mapped[bool] = mapped_column(Boolean, default=False)  # common lead pool: unassigned, anyone can claim
     source_ref: Mapped[str] = mapped_column(String(100), default="", index=True)  # id at the portal it came from
     phone_key: Mapped[str] = mapped_column(String(15), default="", index=True)  # last 10 digits, for duplicate check
+    sales_person_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("sales_team.id"), nullable=True, index=True)  # owner as chosen from the sales team
+    ai_qualification: Mapped[dict] = mapped_column(JSON, default=dict)  # AI Lead Qualifier verdict: {verdict, score, confidence, checks[], at, engine}
+
+
+class SalesPerson(TenantMixin, Base):
+    """The sales team: ERPNext 'Sales Person' records, each tied to an employee. A lead's owner is picked from this list."""
+    __tablename__ = "sales_team"
+    name: Mapped[str] = mapped_column(String(200))
+    erp_name: Mapped[str] = mapped_column(String(140), default="", index=True)  # ERPNext Sales Person id
+    employee: Mapped[str] = mapped_column(String(60), default="")  # ERPNext Employee id
+    parent_name: Mapped[str] = mapped_column(String(140), default="")  # the team head's Sales Person (tree)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_group: Mapped[bool] = mapped_column(Boolean, default=False)
+    designation: Mapped[str] = mapped_column(String(120), default="")
+    department: Mapped[str] = mapped_column(String(140), default="")
+    branch: Mapped[str] = mapped_column(String(100), default="")
+    email: Mapped[str] = mapped_column(String(200), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # their Fieldwise login, if any
 
 
 class Product(TenantMixin, Base):

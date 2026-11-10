@@ -15,7 +15,7 @@ router = APIRouter(prefix="/crm", tags=["crm"])
 
 ENT = {
     "leads": dict(model=Lead, label="lead", owned=True, search=["name", "company", "email", "phone", "city"],
-                  writable=["name", "company", "phone", "email", "source", "status", "value", "owner_id", "city", "country", "notes", "tags", "custom", "product_id", "expected_close", "lost_reason", "temperature", "starred", "observers", "products", "region", "event_id"]),
+                  writable=["name", "company", "phone", "email", "source", "status", "value", "owner_id", "sales_person_id", "city", "country", "notes", "tags", "custom", "product_id", "expected_close", "lost_reason", "temperature", "starred", "observers", "products", "region", "event_id"]),
     "customers": dict(model=Customer, label="customer", owned=True, search=["name", "email", "phone", "city", "gstin"],
                       writable=["name", "industry", "phone", "email", "address", "city", "country", "gstin", "lat", "lng", "owner_id", "tags", "custom", "credit_limit", "credit_days", "parent_id", "business_type"]),
     "contacts": dict(model=Contact, label="contact", owned=True, search=["name", "email", "phone", "designation"],
@@ -189,8 +189,8 @@ def _enrich_leads(ctx: Ctx, rows: list, data: list):
 
 def _check_refs(ctx: Ctx, entity: str, d: dict, obj=None):
     """Every id in a lead / customer / contact / product payload must belong to this workspace."""
-    from ..models import Event, Vendor
-    for k, M in (("owner_id", User), ("event_id", Event), ("customer_id", Customer)):
+    from ..models import Event, Vendor, SalesPerson
+    for k, M in (("owner_id", User), ("event_id", Event), ("customer_id", Customer), ("sales_person_id", SalesPerson)):
         if k in d and d[k] not in (None, ""):
             own(ctx, M, d[k], k.replace("_id", "").title())
     if d.get("parent_id") not in (None, ""):
@@ -256,6 +256,8 @@ def create_record(entity: str, body: dict, bg: BackgroundTasks, ctx: Ctx = Depen
         raise HTTPException(403, "Only admins can manage the product catalog.")
     data = {k: v for k, v in body.items() if k in cfg["writable"]}
     _check_refs(ctx, entity, data)
+    if entity == "leads":
+        svc.sync_owner_fields(ctx.db, ctx.tid, data)
     if not data.get("name"):
         raise HTTPException(422, "Name is required.")
     if entity in ("leads", "customers", "contacts"):
@@ -289,6 +291,9 @@ def create_record(entity: str, body: dict, bg: BackgroundTasks, ctx: Ctx = Depen
     ctx.db.flush()
     if cfg["owned"]:
         log_activity(ctx.db, ctx.tid, cfg["label"], obj.id, ctx.user.id, f"{ctx.user.name} created this {cfg['label']}.")
+    if entity == "leads":
+        from .. import qualifier
+        qualifier.qualify_new_lead(ctx.db, ctx.tenant, obj)  # automation: score the lead and add the reasoning as a remark
     if entity == "leads":  # automation: first follow-up is scheduled automatically
         days = int(ctx.setting("auto_followup_days", 1) or 0)
         if days > 0:
@@ -315,6 +320,8 @@ def update_record(entity: str, rid: int, body: dict, bg: BackgroundTasks, ctx: C
     body = dict(body)
     _check_refs(ctx, entity, {k: v for k, v in body.items() if k in cfg["writable"]}, obj)
     if entity == "leads":
+        if "sales_person_id" in body or "owner_id" in body:
+            svc.sync_owner_fields(ctx.db, ctx.tid, body)
         if svc.stage_map(ctx.tenant).get(obj.status, {}).get("kind") == "won" and "status" in body and body["status"] != obj.status:
             raise HTTPException(422, "A won lead is already a customer and can't be moved back.")
         if body.get("temperature") not in (None, "hot", "warm", "cold"):
@@ -375,9 +382,12 @@ def bulk(entity: str, body: BulkIn, ctx: Ctx = Depends(current)):
         if body.action == "delete":
             obj.deleted_at = utcnow()
         else:
-            for k, v in body.changes.items():
-                if k in cfg["writable"] and k != "custom":
-                    setattr(obj, k, v)
+            ch = {k: v for k, v in body.changes.items() if k in cfg["writable"] and k != "custom"}
+            _check_refs(ctx, entity, ch, obj)
+            if entity == "leads" and ("owner_id" in ch or "sales_person_id" in ch):
+                svc.sync_owner_fields(ctx.db, ctx.tid, ch)
+            for k, v in ch.items():
+                setattr(obj, k, v)
         n += 1
     ctx.db.commit()
     return {"affected": n}

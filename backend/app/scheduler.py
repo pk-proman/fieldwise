@@ -88,7 +88,7 @@ def _hourly(db):
     for t in db.scalars(select(Tenant).where(Tenant.active.is_(True))):
         cfg = (t.settings or {}).get("erpnext") or {}
         if cfg.get("enabled"):
-            for d in ("products", "crm", "attendance", "invoices"):
+            for d in ("products", "sales_team", "crm", "attendance", "invoices"):
                 try:
                     erp.run_sync(t.id, d)
                 except Exception as e:  # logged to SyncLog by run_sync

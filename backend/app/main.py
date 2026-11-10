@@ -9,7 +9,7 @@ from . import config, hub, scheduler
 from .db import Base, engine
 from .migrate import ensure_schema, backfill
 from . import models  # noqa: F401  (register tables)
-from .routers import auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance
+from .routers import auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance, team, aiq
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,7 +30,7 @@ app = FastAPI(title="Fieldwise API", version="1.0.0", lifespan=lifespan, docs_ur
 # The native app's web view runs on its own origin (capacitor://localhost, https://localhost) and calls the API with a Bearer token (no cookies).
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["Authorization", "Content-Type"], allow_credentials=False, max_age=600)
 
-for r in (auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance):
+for r in (auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance, team, aiq):
     app.include_router(r.router, prefix="/api")
 
 

@@ -139,14 +139,74 @@ def pull_employees(db, t: Tenant, client) -> int:
 
 
 def pull_products(db, t: Tenant, client) -> int:
+    """Item master -> Product catalogue. Only the item group set in Settings -> ERPNext (default: every group) is pulled; disabled items are kept but flagged."""
+    group = (_cfg(t).get("item_group") or "").strip()
+    flt = [["item_group", "=", group]] if group else []
     n = 0
-    for r in client.list("Item", ["name", "item_code", "item_name", "item_group", "stock_uom", "standard_rate", "disabled"], [["disabled", "=", 0]]):
+    for r in client.list("Item", ["name", "item_code", "item_name", "item_group", "stock_uom", "standard_rate", "disabled", "gst_hsn_code", "description"], flt):
         p = db.scalar(select(Product).where(Product.tenant_id == t.id, Product.erp_name == r["name"]))
         if not p:
-            p = Product(tenant_id=t.id, erp_name=r["name"], code=r["item_code"], name=r["item_name"])
+            p = Product(tenant_id=t.id, erp_name=r["name"], code=r["item_code"], name=(r.get("item_name") or r["item_code"]).strip())
             db.add(p)
-        p.code, p.name, p.group, p.uom, p.price = r["item_code"], r["item_name"], r.get("item_group") or "", r.get("stock_uom") or "Nos", r.get("standard_rate") or 0
+        p.code, p.name, p.group, p.uom = r["item_code"], (r.get("item_name") or r["item_code"]).strip(), r.get("item_group") or "", r.get("stock_uom") or "Nos"
+        p.price = r.get("standard_rate") or p.price or 0
+        p.hsn = r.get("gst_hsn_code") or p.hsn
+        p.description = _plain(r.get("description")) or p.description
+        p.disabled = bool(r.get("disabled"))
         p.deleted_at = None
+        n += 1
+    return n
+
+
+def _plain(s) -> str:
+    import html as _h, re as _re
+    s = _re.sub(r"<br\s*/?>|</p>|</div>|</li>", "\n", s or "")
+    s = _h.unescape(_re.sub(r"<[^>]+>", "", s)).replace("\xa0", " ")
+    return _re.sub(r"[ \t]+", " ", _re.sub(r"\n\s*\n+", "\n", s)).strip()
+
+
+def upsert_sales_person(db, t: Tenant, row: dict):
+    """One sales-team member (ERPNext Sales Person + their Employee record). Links to the matching Fieldwise login by ERPNext employee id or email."""
+    from ..models import SalesPerson
+    sp = db.scalar(select(SalesPerson).where(SalesPerson.tenant_id == t.id, SalesPerson.erp_name == row["erp_name"]))
+    if not sp:
+        sp = SalesPerson(tenant_id=t.id, erp_name=row["erp_name"], name=row.get("employee_name") or row["erp_name"])
+        db.add(sp)
+    sp.name = (row.get("employee_name") or row["erp_name"]).strip()
+    for k in ("employee", "parent_name", "designation", "department", "branch", "email", "phone"):
+        if row.get(k) is not None:
+            setattr(sp, k, row[k] or "")
+    sp.enabled, sp.is_group = bool(row.get("enabled", True)), bool(row.get("is_group"))
+    sp.deleted_at = None
+    if not sp.user_id:
+        conds = []
+        if sp.employee:
+            conds.append(User.erp_employee == sp.employee)
+        if sp.email:
+            conds.append(User.email == sp.email.lower())
+        if conds:
+            from sqlalchemy import or_
+            u = db.scalar(select(User).where(User.tenant_id == t.id, User.deleted_at.is_(None), or_(*conds)))
+            sp.user_id = u.id if u else None
+    return sp
+
+
+def pull_sales_team(db, t: Tenant, client) -> int:
+    """ERPNext Sales Person tree (+ Employee details) -> the Fieldwise sales team that lead owners are chosen from."""
+    people = client.list("Sales Person", ["name", "employee", "parent_sales_person", "enabled", "is_group"], [["name", "!=", "Sales Team"]])
+    emp_ids = [p["employee"] for p in people if p.get("employee")]
+    emps = {}
+    if emp_ids:
+        for e in client.list("Employee", ["name", "employee_name", "designation", "department", "branch", "user_id", "company_email", "personal_email", "cell_number"], [["name", "in", emp_ids]]):
+            emps[e["name"]] = e
+    n = 0
+    for p in people:
+        e = emps.get(p.get("employee") or "", {})
+        email = (e.get("user_id") or e.get("company_email") or e.get("personal_email") or "").strip().lower()
+        upsert_sales_person(db, t, {"erp_name": p["name"], "employee": p.get("employee") or "", "employee_name": e.get("employee_name") or p["name"],
+                                    "parent_name": "" if p.get("parent_sales_person") in (None, "", "Sales Team") else p["parent_sales_person"], "enabled": p.get("enabled", 1),
+                                    "is_group": p.get("is_group"), "designation": e.get("designation") or "", "department": e.get("department") or "",
+                                    "branch": e.get("branch") or "", "email": email, "phone": e.get("cell_number") or ""})
         n += 1
     return n
 
@@ -380,7 +440,7 @@ def push_expenses(db, t: Tenant, client, ids=None) -> int:
 
 
 # ----------------------------------------- orchestration -----------------------------------------
-DOMAINS = {"invoices": ("in", pull_invoices), "employees": ("in", pull_employees), "products": ("in", pull_products), "crm_pull": ("in", pull_crm),
+DOMAINS = {"invoices": ("in", pull_invoices), "employees": ("in", pull_employees), "products": ("in", pull_products), "sales_team": ("in", pull_sales_team), "crm_pull": ("in", pull_crm),
            "crm_push": ("out", push_crm), "attendance": ("out", push_attendance), "expenses": ("out", push_expenses)}
 
 
