@@ -19,7 +19,7 @@ fi
 ssh "${SSHO[@]}" "$TARGET" "mkdir -p /tmp/fw-seed && chmod 700 /tmp/fw-seed"
 scp "${SSHO[@]}" "$SEED/pispl_products.json" "$SEED/pispl_sales_team.json" "$TARGET:/tmp/fw-seed/"
 ssh "${SSHO[@]}" "$TARGET" "set -e; cd $DIR; APP=\$(docker compose ps -q app)
+  trap 'docker compose exec -T -u root app rm -rf /tmp/fw-seed >/dev/null 2>&1 || true; rm -rf /tmp/fw-seed' EXIT
   docker cp /tmp/fw-seed \$APP:/tmp/fw-seed
-  docker compose exec -T app env PYTHONPATH=/srv/backend python scripts/load_seed.py --tenant '$TENANT' --products /tmp/fw-seed/pispl_products.json --sales-team /tmp/fw-seed/pispl_sales_team.json
-  docker compose exec -T app rm -rf /tmp/fw-seed; rm -rf /tmp/fw-seed"
+  docker compose exec -T -u root app env PYTHONPATH=/srv/backend python scripts/load_seed.py --tenant '$TENANT' --products /tmp/fw-seed/pispl_products.json --sales-team /tmp/fw-seed/pispl_sales_team.json"
 echo "Done. In Fieldwise: Settings -> Sales team, and Leads -> New lead -> Product."
