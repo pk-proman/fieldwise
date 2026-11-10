@@ -11,8 +11,11 @@ while [ $# -gt 0 ]; do case "$1" in --tenant) TENANT="$2"; shift 2;; --dir) DIR=
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; SEED="$HERE/backend/seed"
 for f in pispl_products.json pispl_sales_team.json; do [ -f "$SEED/$f" ] || { echo "missing $SEED/$f"; exit 1; }; done
 SSHO=(-o StrictHostKeyChecking=accept-new)
-RUN="cd $DIR && docker compose exec -T app env PYTHONPATH=/srv/backend python scripts/load_seed.py"
-if [ -z "$TENANT" ]; then ssh "${SSHO[@]}" "$TARGET" "$RUN"; exit 0; fi
+if [ -z "$TENANT" ]; then
+  echo "Workspaces on the server (use one of these with --tenant):"
+  ssh "${SSHO[@]}" "$TARGET" "cd $DIR && docker compose exec -T db psql -U fieldwise -d fieldwise -tAc 'select slug from tenants order by id'"
+  exit 0
+fi
 ssh "${SSHO[@]}" "$TARGET" "mkdir -p /tmp/fw-seed && chmod 700 /tmp/fw-seed"
 scp "${SSHO[@]}" "$SEED/pispl_products.json" "$SEED/pispl_sales_team.json" "$TARGET:/tmp/fw-seed/"
 ssh "${SSHO[@]}" "$TARGET" "set -e; cd $DIR; APP=\$(docker compose ps -q app)
