@@ -104,3 +104,10 @@ tbody tr:last-child td{border-bottom:0}tbody tr.click{cursor:pointer}tbody tr.cl
 .logo .w1{fill:var(--text)}.logo .w2{fill:var(--accent)}.logo .w3{fill:var(--muted)}
 .authlogo{margin:0 0 14px}.authlogo .logo{display:block;width:100%;max-width:300px;height:auto;margin:0 auto}
 .sidelogo{padding:2px 6px 12px}.sidelogo .logo{display:block;width:165px;height:auto}
+
+/* company logo before the company name in the top bar */
+.top .org{display:inline-flex;align-items:center;gap:8px;min-width:0}.top .org span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orglogo{height:24px;width:auto;max-width:110px;object-fit:contain;flex:none}.orglogo.d{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .orglogo.l:not(.solo){display:none}:root:not([data-theme=light]) .orglogo.d{display:inline}}
+:root[data-theme=dark] .orglogo.l:not(.solo){display:none}:root[data-theme=dark] .orglogo.d{display:inline}
+@media (max-width:520px){.orglogo{height:20px;max-width:84px}}

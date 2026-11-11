@@ -9,7 +9,7 @@ TARGET="${1:-}"; shift || true; TENANT=""; DIR="/opt/fieldwise"
 while [ $# -gt 0 ]; do case "$1" in --tenant) TENANT="$2"; shift 2;; --dir) DIR="$2"; shift 2;; *) echo "unknown option $1"; exit 1;; esac; done
 [ -n "$TARGET" ] || { echo "usage: $0 user@host [--tenant slug] [--dir /opt/fieldwise]"; exit 1; }
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; SEED="$HERE/backend/seed"
-for f in pispl_products.json pispl_sales_team.json; do [ -f "$SEED/$f" ] || { echo "missing $SEED/$f"; exit 1; }; done
+for f in pispl_products.json pispl_sales_team.json proman-logo.png proman-logo-darkmode.png; do [ -f "$SEED/$f" ] || { echo "missing $SEED/$f"; exit 1; }; done
 SSHO=(-o StrictHostKeyChecking=accept-new)
 if [ -z "$TENANT" ]; then
   echo "Workspaces on the server (use one of these with --tenant):"
@@ -17,9 +17,9 @@ if [ -z "$TENANT" ]; then
   exit 0
 fi
 ssh "${SSHO[@]}" "$TARGET" "mkdir -p /tmp/fw-seed && chmod 700 /tmp/fw-seed"
-scp "${SSHO[@]}" "$SEED/pispl_products.json" "$SEED/pispl_sales_team.json" "$TARGET:/tmp/fw-seed/"
+scp "${SSHO[@]}" "$SEED/pispl_products.json" "$SEED/pispl_sales_team.json" "$SEED/proman-logo.png" "$SEED/proman-logo-darkmode.png" "$TARGET:/tmp/fw-seed/"
 ssh "${SSHO[@]}" "$TARGET" "set -e; cd $DIR; APP=\$(docker compose ps -q app)
   trap 'docker compose exec -T -u root app rm -rf /tmp/fw-seed >/dev/null 2>&1 || true; rm -rf /tmp/fw-seed' EXIT
   docker cp /tmp/fw-seed \$APP:/tmp/fw-seed
-  docker compose exec -T -u root app env PYTHONPATH=/srv/backend python scripts/load_seed.py --tenant '$TENANT' --products /tmp/fw-seed/pispl_products.json --sales-team /tmp/fw-seed/pispl_sales_team.json"
+  docker compose exec -T -u root app env PYTHONPATH=/srv/backend python scripts/load_seed.py --tenant '$TENANT' --products /tmp/fw-seed/pispl_products.json --sales-team /tmp/fw-seed/pispl_sales_team.json --logo /tmp/fw-seed/proman-logo.png --logo-dark /tmp/fw-seed/proman-logo-darkmode.png"
 echo "Done. In Fieldwise: Settings -> Sales team, and Leads -> New lead -> Product."

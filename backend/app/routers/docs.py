@@ -82,8 +82,8 @@ class CFile(BaseModel):
 
 @router.post("/company/files")
 def company_file(body: CFile, ctx: Ctx = Depends(require("admin"))):
-    if body.kind not in ("logo", "banner"):
-        raise HTTPException(422, "kind must be logo or banner.")
+    if body.kind not in ("logo", "logo_dark", "banner"):
+        raise HTTPException(422, "kind must be logo, logo_dark or banner.")
     raw, ext = decode_data_url(body.data)
     path = save_upload(ctx.tid, raw, ext)
     s = dict(ctx.tenant.settings or {})

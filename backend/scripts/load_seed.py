@@ -1,5 +1,5 @@
 """Loads catalogue / sales-team files exported from ERPNext into a workspace (one-off; the live path is Settings -> ERPNext -> Sync now).
-   PYTHONPATH=. python scripts/load_seed.py --tenant proman --products seed/pispl_products.json [--sales-team seed/pispl_sales_team.json]
+   PYTHONPATH=. python scripts/load_seed.py --tenant proman --products seed/pispl_products.json [--sales-team seed/pispl_sales_team.json] [--logo seed/proman-logo.png --logo-dark seed/proman-logo-darkmode.png]
    Safe to re-run: rows are matched on their ERPNext id and updated.  Files under backend/seed/ are git-ignored on purpose."""
 import argparse
 import json
@@ -15,6 +15,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--tenant", help="workspace slug (omit to list the workspaces on this server)")
 ap.add_argument("--products")
 ap.add_argument("--sales-team")
+ap.add_argument("--logo", help="company logo (PNG/JPG) shown before the company name")
+ap.add_argument("--logo-dark", help="optional light-coloured logo for dark mode")
 a = ap.parse_args()
 db = SessionLocal()
 if not a.tenant:
@@ -42,4 +44,16 @@ if a.sales_team:
         upsert_sales_person(db, t, r)
         n += 1
     print(f"sales team: {n} people")
+if a.logo or a.logo_dark:
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.common import save_upload
+    st = dict(t.settings or {})
+    co = dict(st.get("company") or {})
+    for path, key in ((a.logo, "logo_path"), (a.logo_dark, "logo_dark_path")):
+        if path:
+            co[key] = save_upload(t.id, open(path, "rb").read(), path.rsplit(".", 1)[-1])
+    st["company"] = co
+    t.settings = st
+    flag_modified(t, "settings")
+    print("logo set:", ", ".join(k for k in ("logo_path", "logo_dark_path") if co.get(k)))
 db.commit()

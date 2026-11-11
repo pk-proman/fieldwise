@@ -1,5 +1,5 @@
 import { LOGO_FULL, LOGO_COMPACT } from "./brand.js";
-import { get, post, session, setAuthLostHandler, queue } from "./api.js";
+import { get, post, session, setAuthLostHandler, queue, fileUrl } from "./api.js";
 import { $, $$, esc, toast, fail, svgIcon, fmtDT, skeleton, modal, debounce } from "./ui.js";
 import * as tracker from "./tracker.js";
 import { isBundled, serverBase, setServer } from "./config.js";
@@ -131,6 +131,15 @@ function forgotModal() {
     actions: [{ label: "Cancel", close: true }, { label: "Send reset link", primary: true, onClick: async el => { await post("/auth/forgot", { workspace: $("#fw", el).value, email: $("#fe", el).value }); toast("If that account exists, a reset link is on its way."); } }] });
 }
 
+// Company logo (uploaded in Settings -> Company profile) before the company name; an optional second logo is used in dark mode.
+function orgHTML() {
+  const c = S.tenant?.settings?.company || {}, name = esc(S.tenant?.name || c.name || "");
+  if (!c.logo_path) return name;
+  const img = (p, cls) => `<img class="orglogo ${cls}" src="${esc(fileUrl(p))}" alt="" onerror="this.remove()">`;
+  return (c.logo_dark_path ? img(c.logo_path, "l") + img(c.logo_dark_path, "d") : img(c.logo_path, "l solo")) + `<span>${name}</span>`;
+}
+window.addEventListener("fw-company", e => { if (S.tenant) { S.tenant.settings = { ...S.tenant.settings, company: e.detail }; const o = document.getElementById("org"); if (o) o.innerHTML = orgHTML(); } });
+
 function authScreen(mode = "login", msg = "") {
   const signup = mode === "signup";
   $("#app").innerHTML = `<div class="auth"><form class="card" id="authf" novalidate>
@@ -163,7 +172,7 @@ function shell() {
   const nav = ROUTES.filter(r => r.sec ? (!r.min || ROLE[S.user.role] >= ROLE[r.min]) : allowed(r));
   $("#app").innerHTML = `<div class="shell"><aside class="side"><div class="brand sidelogo" aria-label="Fieldwise">${LOGO_COMPACT}</div>
     <nav class="nav" aria-label="Main">${nav.map(r => r.sec ? `<div class="sec">${r.sec}</div>` : `<a href="#/${r.p}" data-p="${r.p}">${svgIcon(r.i)}<span>${esc(r.t)}</span></a>`).join("")}</nav></aside>
-    <div class="main"><header class="top"><span class="org">${esc(S.tenant.name)}</span><span class="net" id="net">● Online</span><span id="qn" class="small muted"></span>
+    <div class="main"><header class="top"><span class="org" id="org">${orgHTML()}</span><span class="net" id="net">● Online</span><span id="qn" class="small muted"></span>
       <div style="position:relative;flex:1;max-width:380px"><input id="gs" type="search" placeholder="Search leads, customers, mobile, email…" aria-label="Global search" autocomplete="off" style="min-height:34px"><div id="gsr" class="card" style="display:none;position:absolute;left:0;right:0;top:40px;max-height:60vh;overflow:auto;padding:6px;z-index:60"></div></div>
       <button class="btn icon right" id="bell" aria-label="Notifications">${svgIcon("bell").replace("<svg", '<svg style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8"')}</button><span id="nb"></span>
       <button class="btn sm" id="me" aria-haspopup="menu">${esc(S.user.name.split(" ")[0])} ▾</button></header>
