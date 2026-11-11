@@ -3,7 +3,7 @@
 // would use a background-geolocation plugin and a native mock-location flag instead of the heuristic below.
 import { queue, post } from "./api.js";
 import { haversine } from "./geo.js";
-import { isNative, startNativeTracking, stopNativeTracking } from "./native.js";
+import { isNative, startNativeTracking, stopNativeTracking, restartNativeTracking, lastNativeFixAt } from "./native.js";
 
 let watchId = null, timer = null, last = null, lastSent = 0, gpsOk = true, battery = null, lastCur = null;
 export const state = { active: false, lastFix: null, listeners: new Set() };
@@ -37,6 +37,12 @@ function startBrowserTracking() {
     () => { gpsOk = false; }, { enableHighAccuracy: true, maximumAge: 15000 });
   timer = setInterval(() => { if (!gpsOk) record(null, false); else if (cur && Date.now() - lastSent > 150000) { record(cur); lastCur = cur; } }, 30000);
   emit();
+}
+/** Call when the app returns to the foreground: if the phone's tracking service silently died, start it again. */
+let restarting = false;
+export function ensure() {
+  if (!state.active || !isNative() || restarting || Date.now() - lastNativeFixAt() < 6 * 60000) return;
+  restarting = true; restartNativeTracking().catch(() => {}).finally(() => { restarting = false; });
 }
 export function stop() { stopNativeTracking(); if (watchId != null) navigator.geolocation.clearWatch(watchId); clearInterval(timer); watchId = timer = null; state.active = false; last = null; emit(); }
 

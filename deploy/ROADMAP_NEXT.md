@@ -62,6 +62,7 @@ Today: auto-dialer campaigns only. Add, in this order:
 Two tracks that run in parallel. The app already has a foreground-service tracker; the gap is **proof on real phones** and **Play distribution**.
 
 **D1. Make it dependable (next 2 to 3 weeks, in Phase 1 testing)**
+*Status 2026-11-11: items 2, 3 and 6 are built in app 1.1.0 (setup wizard with the tracking notice, watchdog and boot notifications, resume-time restart, stationary heartbeat, phone-health view with likely cause in alerts). Items 1 (device tests), 4 and 5 remain. Not yet run on any phone.*
 1. Run `deploy/ANDROID_DEVICE_TEST.md` on Xiaomi, Oppo, Vivo, Samsung and Pixel for full days. Treat the measured gap between pings per brand as the acceptance number.
 2. **Setup wizard inside the app** (not just the download page): after first sign-in, step through location "Allow all the time", notification permission, battery set to Unrestricted, and the brand-specific Autostart/lock screens, with a deep link to the right settings page per manufacturer, and a status check that shows green only when each is really set.
 3. **Self-healing:** a watchdog (WorkManager job) that restarts the service if the OS killed it, resume after reboot when the user is checked in, and a "tracking stopped unexpectedly" push/alert to the manager (silent-tracker alert already exists server-side; make it fire on a real gap and show the reason: GPS off, no permission, battery restriction, app killed, offline).

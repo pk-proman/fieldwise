@@ -189,6 +189,7 @@ function shell() {
   window.addEventListener("online", net); window.addEventListener("offline", net); setInterval(net, 5000); net();
   pollNotifs(); setInterval(pollNotifs, 60000);
   get("/attendance/today").then(r => { if (r.attendance?.check_in_at && !r.attendance.check_out_at) tracker.start(); }).catch(() => {});
+  if (isBundled()) import("./trackwizard.js").then(m => m.startHealthWatch()).catch(() => {});   // Android app: setup wizard, health banner, self-restart
 }
 
 async function pollNotifs() { try { const n = await get("/notifications"); $("#nb").innerHTML = n.unread ? `<span class="badge">${n.unread}</span>` : ""; } catch {} }
@@ -207,12 +208,13 @@ function userMenu() {
   const old = $("#pop"); if (old) return old.remove();
   const pop = document.createElement("div"); pop.id = "pop"; pop.className = "card pop"; pop.style.width = "240px";
   pop.innerHTML = `<div style="margin-bottom:8px"><strong>${esc(S.user.name)}</strong><div class="small muted">${esc(S.user.email)} · ${esc(S.user.role)}</div></div>
-   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for check-in</button><button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`;
+   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for check-in</button>${isBundled() ? '<button class="btn" style="width:100%;margin-bottom:6px" id="trk">Tracking setup &amp; health</button>' : ""}<button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`;
   document.body.appendChild(pop);
   const close = e => { if (!pop.contains(e.target) && e.target.id !== "me") { pop.remove(); document.removeEventListener("mousedown", close); } }; setTimeout(() => document.addEventListener("mousedown", close));
   $("#th", pop).onclick = () => { const r = document.documentElement, dark = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme:dark)").matches); r.dataset.theme = dark ? "light" : "dark"; };
   $("#lo", pop).onclick = async () => { try { await post("/auth/logout"); } catch {} tracker.stop(); session.clear(); S.user = null; authScreen("login"); };
   $("#mf", pop).onclick = () => { pop.remove(); enrollMfa(false); };
+  $("#trk", pop)?.addEventListener("click", async () => { pop.remove(); (await import("./trackwizard.js")).openWizard(); });
   $("#fe", pop).onclick = async () => { pop.remove(); try { const { captureSelfie } = await import("./ui.js"); const img = await captureSelfie(); await post("/auth/face-enroll", { image: img }); toast("Face enrolled."); } catch (e) { fail(e); } };
 }
 

@@ -100,6 +100,14 @@ class LocationPing(TenantMixin, Base):
     mock: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class DeviceHealth(TenantMixin, Base):
+    """What the phone last told us about whether background tracking can survive (permissions, battery restriction, brand). One row per user."""
+    __tablename__ = "device_health"
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    reported_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class LeaveType(TenantMixin, Base):
     __tablename__ = "leave_types"
     name: Mapped[str] = mapped_column(String(100))

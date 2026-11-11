@@ -2,12 +2,13 @@
 // Newer: a dismissible prompt (once a day per version). Older than the server's minimum: a blocking prompt.
 import { serverBase } from "./config.js";
 import { modal, esc } from "./ui.js";
+import { plugin } from "./native.js";
 
 const cap = () => window.Capacitor;
 let busy = false, shown = null;
 
 async function installedBuild() {
-  const app = cap()?.Plugins?.App;
+  const app = plugin("App");
   if (!app?.getInfo) return null;
   try { const i = await app.getInfo(); return { code: parseInt(i.build, 10) || 0, name: i.version }; } catch { return null; }
 }

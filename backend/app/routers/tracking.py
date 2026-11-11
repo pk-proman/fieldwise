@@ -4,7 +4,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from ..db import SessionLocal
 from ..deps import Ctx, current, _auth
-from ..models import LocationPing, User, Attendance, Branch, Visit, Customer, utcnow
+from ..models import LocationPing, User, Attendance, Branch, Visit, Customer, DeviceHealth, utcnow
+from ..deps import require
+from .. import devhealth
 from ..common import to_dict, local_today, parse_day, local_day_bounds_utc
 from ..geo import path_km
 from .. import hub
@@ -57,6 +59,59 @@ def ingest(pings: list[PingIn], ctx: Ctx = Depends(current)):
         hub.publish(ctx.tid, ctx.user.id, {"type": "ping", "user_id": ctx.user.id, "name": ctx.user.name, "lat": p.lat, "lng": p.lng,
                                            "battery": p.battery, "network": p.network, "gps_on": p.gps_on, "ts": ts.isoformat() + "Z"})
     return {"accepted": added}
+
+
+class HealthIn(BaseModel):
+    location: str = "unknown"                     # always | while_in_use | denied | unknown
+    location_services: bool | None = None
+    notifications: bool | None = None
+    battery_unrestricted: bool | None = None
+    autostart_confirmed: bool | None = None
+    disclosure_accepted: bool | None = None
+    manufacturer: str = Field("", max_length=40)
+    model: str = Field("", max_length=60)
+    android: int | None = None
+    app_version: str = Field("", max_length=20)
+    tracking_active: bool = False
+    last_ping_age_min: float | None = None
+    stop_reason: str = Field("", max_length=30)
+
+
+@router.post("/tracking/health")
+def report_health(body: HealthIn, ctx: Ctx = Depends(current)):
+    """The phone reports whether tracking can survive (permissions, battery restriction, brand). Sent on app open, resume and every 30 min while on duty."""
+    row = ctx.db.scalar(select(DeviceHealth).where(DeviceHealth.tenant_id == ctx.tid, DeviceHealth.user_id == ctx.user.id))
+    if not row:
+        row = DeviceHealth(tenant_id=ctx.tid, user_id=ctx.user.id)
+        ctx.db.add(row)
+    row.data = body.model_dump()
+    row.reported_at = utcnow()
+    ctx.db.commit()
+    return {"problems": devhealth.problems(row.data)}
+
+
+@router.get("/tracking/health")
+def team_health(ctx: Ctx = Depends(require("manager"))):
+    """Per-person tracking health for the people this manager can see: what is wrong and how to fix it."""
+    ids = ctx.team_ids()
+    now = utcnow()
+    users = {u.id: u for u in ctx.db.scalars(select(User).where(User.tenant_id == ctx.tid, User.id.in_(ids), User.active.is_(True), User.deleted_at.is_(None)))}
+    rows = {r.user_id: r for r in ctx.db.scalars(select(DeviceHealth).where(DeviceHealth.tenant_id == ctx.tid, DeviceHealth.user_id.in_(ids)))}
+    att = _current_sessions(ctx, list(users))
+    last = dict(ctx.db.execute(select(LocationPing.user_id, func.max(LocationPing.ts)).where(
+        LocationPing.tenant_id == ctx.tid, LocationPing.user_id.in_(list(users)), LocationPing.ts >= now - timedelta(hours=24)).group_by(LocationPing.user_id)).all())
+    out = []
+    for uid, u in users.items():
+        r = rows.get(uid)
+        a = att.get(uid)
+        on_duty = bool(a and not a.check_out_at)
+        d = r.data if r else {}
+        age = round((now - last[uid]).total_seconds() / 60) if uid in last else None
+        out.append({"user_id": uid, "name": u.name, "on_duty": on_duty, "reported": bool(r), "reported_at": r.reported_at.isoformat() + "Z" if r else None,
+                    "device": (f"{d.get('manufacturer', '')} {d.get('model', '')}".strip() or None), "android": d.get("android"), "app_version": d.get("app_version") or None,
+                    "battery": None, "last_ping_min": age, "problems": devhealth.problems(d) if r else []})
+    out.sort(key=lambda x: (not x["on_duty"], -len(x["problems"]), x["name"]))
+    return out
 
 
 def _current_sessions(ctx: Ctx, ids) -> dict:

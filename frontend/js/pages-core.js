@@ -79,11 +79,27 @@ export async function attendance(root, S) {
   return () => { tracker.state.listeners.delete(updGps); map?.remove(); };
 }
 
+// ----------------------------------------------------------------- Phone health (can each person's phone keep tracking alive?)
+async function phoneHealth() {
+  const body = document.createElement("div"); body.innerHTML = skeleton(4);
+  const m = modal({ title: "Phone health", wide: true, body, actions: [{ label: "Close", close: true }] });
+  try {
+    const rows = await get("/tracking/health");
+    const bad = rows.filter(r => r.problems.length).length, none = rows.filter(r => !r.reported).length;
+    body.innerHTML = `<p class="small muted" style="margin-top:0">${rows.length} people · <b>${bad}</b> with a problem that can stop tracking · ${none} have not opened the Android app yet. Reports arrive when the app is opened and every 30 minutes while on duty.</p>` +
+      (rows.length ? `<div class="tablewrap"><table><thead><tr><th>Person</th><th>Phone</th><th>App</th><th>Last location</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr>
+        <td><b>${esc(r.name)}</b>${r.on_duty ? ' <span class="chip ok">on duty</span>' : ""}</td><td>${r.device ? esc(r.device) + (r.android ? ` <span class="small muted">Android ${r.android}</span>` : "") : '<span class="muted">—</span>'}</td>
+        <td>${esc(r.app_version || "—")}</td><td>${r.last_ping_min == null ? "—" : r.last_ping_min < 1 ? "just now" : r.last_ping_min + " min ago"}</td>
+        <td>${!r.reported ? '<span class="chip">no report</span>' : r.problems.length ? r.problems.map(p => `<div><span class="chip bad">${esc(p.text)}</span><div class="small muted">${esc(p.fix)}</div></div>`).join("") : '<span class="chip ok">All good</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">No team members yet.</div>');
+  } catch (e) { m.close(); fail(e); }
+}
+
 // ----------------------------------------------------------------- Live team
 const PALETTE = ["#175cd3", "#d92d20", "#067647", "#b54708", "#7a2fd4", "#0e9384", "#c11574", "#4d5565"];
 export async function team(root, S) {
-  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label></div>
+  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
     <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr)"><div class="card" style="padding:8px"><div id="map" class="map tall"></div></div><div class="card"><h2>Team</h2><div id="list" class="live-list">${skeleton(4)}</div><div id="detail" style="margin-top:12px"></div></div></div>`;
+  $("#phh") && ($("#phh").onclick = phoneHealth);
   const map = makeMap($("#map"), S.tenant.settings.map_style, [20.5, 78.9], 5), markers = {}, lines = {}, extra = L.layerGroup().addTo(map || L.layerGroup()); let people = {}, routes = {}, selected = null, fitted = false;
   const col = uid => PALETTE[uid % PALETTE.length], stateCol = s => ({ live: "#067647", idle: "#b54708", offline: "#b42318", no_gps: "#175cd3", checked_out: "#98a2b3" }[s] || "#667085");
   const paintList = () => { const ps = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));

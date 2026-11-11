@@ -4,11 +4,11 @@ import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select, delete
 from .db import SessionLocal
-from .models import (Tenant, User, Attendance, Task, Visit, LocationPing, Lead, Customer, Contact, ExpenseClaim, Product, Branch, Followup, Meeting, Quotation, utcnow)
+from .models import (Tenant, User, Attendance, Task, Visit, LocationPing, Lead, Customer, Contact, ExpenseClaim, Product, Branch, Followup, Meeting, Quotation, DeviceHealth, utcnow)
 from .common import local_now, local_today
 from .notify import notify
 from .models import Notification
-from . import config
+from . import config, devhealth
 
 log = logging.getLogger("fieldwise.scheduler")
 _last = {"hourly": None, "daily": None}
@@ -36,8 +36,10 @@ def _tick_tenant(db, t: Tenant):
             lim = s.get("gps_off_alert_min", 15)
             silent = last is None or (now - last.ts) > timedelta(minutes=lim)
             if (last and not last.gps_on) or silent:
-                body = f"{u.name}'s GPS is off or silent for over {lim} min."
-                notify(db, t.id, u.id, "GPS is OFF", "Turn on location so your day is tracked.", "gps", f"gps:{u.id}:{today}:{now_l.hour}")
+                dh = db.scalar(select(DeviceHealth).where(DeviceHealth.tenant_id == t.id, DeviceHealth.user_id == u.id))
+                why = devhealth.likely_reason(dh.data if dh else None)   # the phone's own last report: battery restriction, permission, location off...
+                body = f"{u.name}'s GPS is off or silent for over {lim} min." + (f" Likely cause: {why}." if why else "")
+                notify(db, t.id, u.id, "GPS is OFF", "Turn on location so your day is tracked." + (f" {why}." if why else ""), "gps", f"gps:{u.id}:{today}:{now_l.hour}")
                 if u.manager_id:
                     notify(db, t.id, u.manager_id, "Team GPS alert", body, "gps", f"gpsm:{u.id}:{today}:{now_l.hour}")
     for tk in db.scalars(select(Task).where(Task.tenant_id == t.id, Task.deleted_at.is_(None), Task.status != "done", Task.reminded.is_(False),

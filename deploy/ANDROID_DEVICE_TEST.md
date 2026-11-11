@@ -8,6 +8,18 @@ Record: phone model, Android version, pass/fail, notes. **Minimum set:** one Xia
 2. Sign in. When asked for location choose **Allow all the time**; allow notifications and camera.
 3. Battery: Settings, Apps, Fieldwise, Battery = Unrestricted. Xiaomi/Oppo/Vivo: turn on Autostart and lock the app in recents.
 
+## Tests (wizard and self-restart, new in 1.1.0)
+| # | Test | Pass when |
+|---|---|---|
+| W1 | First launch after sign-in | "How tracking works" notice appears, then the setup guide opens by itself |
+| W2 | Work through the guide | Each red item turns green by itself when you return from the phone's settings; Xiaomi/Oppo/Vivo/Samsung/Huawei/OnePlus show the Autostart step and its button opens the brand's page (note which phones fall back to the plain app-settings page) |
+| W3 | Turn battery back to Optimised while on duty | Orange "Tracking may stop on this phone" bar appears within a minute of returning to the app; **Fix now** reopens the guide |
+| W4 | Force-stop from Settings while on duty, wait 15 to 30 min | A "Your route has stopped recording" notification appears; tapping it opens the app and tracking resumes |
+| W5 | Reboot while on duty | "Your phone restarted" notification appears; tapping resumes tracking |
+| W6 | Sit still for 30 minutes on duty | No false alert; the manager's live view keeps showing the person with a fresh "minutes ago" (heartbeat) |
+| W7 | Turn phone location off while on duty | Within ~2 min a GPS-off point is recorded; the manager gets "GPS is OFF ... Likely cause: ..." within the alert window |
+| W8 | Manager: Live team, **Phone health** | Every tester appears with phone model, app version and the same problems the phone showed |
+
 ## Tests
 | # | Test | Pass when |
 |---|---|---|
