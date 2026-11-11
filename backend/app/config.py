@@ -30,3 +30,10 @@ PING_RETENTION_DAYS = int(os.getenv("PING_RETENTION_DAYS", "180"))
 # Direct-download Android app: publish-apk.sh puts the signed APK and latest.json here (a bind mount in docker-compose).
 RELEASES_DIR = Path(os.getenv("RELEASES_DIR", BASE_DIR.parent / "releases"))
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@promaninfi.com")
+
+# Product identity (white-label friendly: change here or by env, nothing else mentions a client name)
+PRODUCT_NAME = os.getenv("PRODUCT_NAME", "Fieldwise")
+VENDOR_NAME = os.getenv("VENDOR_NAME", "")   # the company that sells the product; shown on the platform console and the download page
+# Public self-signup creates a ready-to-use trial workspace. Off by default in production: the vendor's super-admin provisions each client.
+ALLOW_SIGNUP = os.getenv("ALLOW_SIGNUP", "0" if ENV == "production" else "1") == "1"
+PLATFORM_SLUG = "_platform"

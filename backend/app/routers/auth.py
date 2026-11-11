@@ -32,7 +32,7 @@ DEFAULT_POLICY = ("While you are checked in for work, this app records your loca
 
 def consent_needed(ctx) -> bool:
     s = ctx.tenant.settings or {}
-    return bool(s.get("require_tracking_consent", True)) and ctx.user.role != "owner" and (ctx.user.consent_at is None or ctx.user.consent_version != str(s.get("tracking_policy_version", "1")))
+    return bool(s.get("require_tracking_consent", True)) and ctx.user.role not in ("owner", "superadmin") and (ctx.user.consent_at is None or ctx.user.consent_version != str(s.get("tracking_policy_version", "1")))
 
 
 class SignupIn(BaseModel):
@@ -87,10 +87,13 @@ def bootstrap_tenant(db: Session, company, owner_name, email, password, country=
 
 @router.post("/signup")
 def signup(body: SignupIn, db: Session = Depends(get_db)):
+    if not config.ALLOW_SIGNUP:
+        raise HTTPException(403, f"Sign-up is by invitation. Please contact {config.VENDOR_NAME or config.PRODUCT_NAME} to get a workspace.")
     problem = check_password(body.password, body.email)
     if problem:
         raise HTTPException(422, problem)
     t, owner = bootstrap_tenant(db, body.company, body.name, body.email, body.password, body.country)
+    t.setup_completed_at = utcnow()   # self-serve trial: usable at once (provisioned clients go through the mandatory setup wizard)
     out = issue(db, owner, "signup")
     out["workspace"] = t.slug
     return out
@@ -135,9 +138,15 @@ def logout(ctx: Ctx = Depends(current)):
     return {"ok": True}
 
 
+@router.get("/public-config")
+def public_config():
+    """Before sign-in: what the login screen needs to know."""
+    return {"product": config.PRODUCT_NAME, "vendor": config.VENDOR_NAME, "signup_enabled": config.ALLOW_SIGNUP, "support_email": config.SUPPORT_EMAIL}
+
+
 @router.get("/me")
 def me(ctx: Ctx = Depends(current)):
-    return {"user": to_dict(ctx.user), "tenant": {"id": ctx.tenant.id, "name": ctx.tenant.name, "slug": ctx.tenant.slug,
+    return {"kind": ctx.tenant.kind, "setup_complete": ctx.tenant.kind != "client" or ctx.tenant.setup_completed_at is not None, "impersonated": bool(ctx.impersonated_by),"user": to_dict(ctx.user), "tenant": {"id": ctx.tenant.id, "name": ctx.tenant.name, "slug": ctx.tenant.slug,
             "plan": ctx.tenant.plan, "settings": {**{k: v for k, v in (ctx.tenant.settings or {}).items() if k not in ("erpnext", "secrets", "smtp", "gateways", "intake", "ai", "assignment")}, "stages": svc.stages_of(ctx.tenant)}},
             "face_enrolled": bool(ctx.user.face_ref), "consent_required": consent_needed(ctx),
             "tracking_policy": (ctx.tenant.settings or {}).get("tracking_policy") or DEFAULT_POLICY}
@@ -150,6 +159,8 @@ class PwIn(BaseModel):
 
 @router.post("/change-password")
 def change_password(body: PwIn, ctx: Ctx = Depends(current)):
+    if ctx.impersonated_by:
+        raise HTTPException(403, "Not available while signed in as the client's administrator.")
     if not verify_password(body.current_password, ctx.user.password_hash):
         raise HTTPException(400, "Current password is incorrect.")
     problem = check_password(body.new_password, ctx.user.email)

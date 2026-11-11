@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.1.1",
+  "versionCode": 4,
+  "versionName": "1.2.0",
   "minVersionCode": 1,
-  "releaseNotes": "Fixed: the + New beat and + New branch buttons did nothing\nFixed: Save and Cancel buttons were hidden below the screen on long forms\nTracking setup guide, stop alerts and standing-still heartbeat (from 1.1.0)"
+  "releaseNotes": "Works for any company workspace: sign in with your company's workspace code\nNew setup guide for company administrators\nFixed: New beat and New branch buttons, Save buttons below the screen on long forms\nTracking setup guide and stop alerts"
 }

@@ -20,9 +20,12 @@ def new_session_id() -> str:
     return secrets.token_hex(16)
 
 
-def make_token(user_id: int, tenant_id: int, session_id: str, ttl_hours: float | None = None) -> str:
+def make_token(user_id: int, tenant_id: int, session_id: str, ttl_hours: float | None = None, impersonated_by: int | None = None) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=ttl_hours or TOKEN_TTL_HOURS)
-    return jwt.encode({"sub": str(user_id), "tid": tenant_id, "sid": session_id, "exp": exp}, SECRET_KEY, algorithm="HS256")
+    claims = {"sub": str(user_id), "tid": tenant_id, "sid": session_id, "exp": exp}
+    if impersonated_by:
+        claims["imp"] = impersonated_by
+    return jwt.encode(claims, SECRET_KEY, algorithm="HS256")
 
 
 def decode_token(token: str) -> dict:

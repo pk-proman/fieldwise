@@ -10,6 +10,8 @@ def ensure_schema():
         return
     Base.metadata.create_all(engine)
     insp = inspect(engine)
+    # The setup-wizard column is new: workspaces that already exist are in use, so they count as set up (only on the run that adds the column).
+    legacy_setup = "tenants" in insp.get_table_names() and "setup_completed_at" not in {c["name"] for c in insp.get_columns("tenants")}
     with engine.begin() as cx:
         for table in Base.metadata.sorted_tables:
             have = {c["name"] for c in insp.get_columns(table.name)}
@@ -26,6 +28,10 @@ def ensure_schema():
                 elif isinstance(d, str):
                     default = " DEFAULT '" + d.replace("'", "''") + "'"
                 cx.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {ddl}{default}'))
+
+    if legacy_setup:
+        with engine.begin() as cx:
+            cx.execute(text("UPDATE tenants SET setup_completed_at = created_at WHERE setup_completed_at IS NULL"))
 
 
 def backfill():

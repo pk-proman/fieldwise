@@ -28,6 +28,12 @@ class Tenant(Base):
     # {fuel_rate_per_km, fuel_daily_cap, currency, timezone, work_start, work_end, require_face, require_visit_otp,
     #  geofence_default_m, labels:{check_in,check_out}, map_style, erpnext:{url,api_key,api_secret,enabled,...}}
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Platform layer: "client" = a customer company; "platform" = the vendor's own console workspace (holds super-admins only)
+    kind: Mapped[str] = mapped_column(String(20), default="client")
+    setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)   # NULL = the mandatory setup wizard is not finished
+    setup_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)                   # {"company": true, "modules": true, ...}
+    contact_email: Mapped[str] = mapped_column(String(200), default="")
+    notes: Mapped[str] = mapped_column(String(1000), default="")                            # vendor-side notes, never shown to the client
 
 
 class User(TenantMixin, Base):
@@ -36,7 +42,7 @@ class User(TenantMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str] = mapped_column(String(30), default="")
     password_hash: Mapped[str] = mapped_column(String(200))
-    role: Mapped[str] = mapped_column(String(20), default="employee")  # owner|admin|manager|employee
+    role: Mapped[str] = mapped_column(String(20), default="employee")  # superadmin (platform workspace only) | owner = the client's designated administrator | admin | manager | employee
     manager_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     branch_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("branches.id"), nullable=True)
     territory: Mapped[str] = mapped_column(String(100), default="")

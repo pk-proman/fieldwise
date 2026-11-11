@@ -7,12 +7,13 @@ from .db import get_db
 from .models import User, Tenant, utcnow
 from .security import decode_token
 
-ROLE_RANK = {"employee": 1, "manager": 2, "admin": 3, "owner": 4}
+ROLE_RANK = {"employee": 1, "manager": 2, "admin": 3, "owner": 4, "superadmin": 5}
 
 
 class Ctx:
     def __init__(self, user: User, tenant: Tenant, db: Session):
         self.user, self.tenant, self.db = user, tenant, db
+        self.impersonated_by = None
 
     @property
     def tid(self):
@@ -49,8 +50,13 @@ def _auth(db: Session, token: str) -> Ctx:
     tenant = db.get(Tenant, user.tenant_id)
     if not tenant or not tenant.active:
         raise HTTPException(403, "This workspace is suspended. Contact support.")
+    # Mandatory first step: until the client's administrator finishes the setup wizard, only administrators can use the workspace.
+    if tenant.kind == "client" and tenant.setup_completed_at is None and user.role not in ("owner", "admin"):
+        raise HTTPException(403, "SETUP_PENDING: Your company's setup is not finished yet. Please ask your administrator to complete it.")
     user.last_seen = utcnow()
-    return Ctx(user, tenant, db)
+    ctx = Ctx(user, tenant, db)
+    ctx.impersonated_by = claims.get("imp")   # set when the vendor's super-admin is acting as this client's administrator
+    return ctx
 
 
 def current(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> Ctx:
@@ -58,6 +64,13 @@ def current(authorization: str = Header(default=""), db: Session = Depends(get_d
         raise HTTPException(401, "Sign in required.")
     ctx = _auth(db, authorization[7:])
     db.commit()
+    return ctx
+
+
+def require_platform(ctx: Ctx = Depends(current)) -> Ctx:
+    """Vendor console only: a super-admin signed in to the platform workspace."""
+    if ctx.user.role != "superadmin" or ctx.tenant.kind != "platform":
+        raise HTTPException(403, "Platform administrators only.")
     return ctx
 
 

@@ -1,6 +1,6 @@
 # Fieldwise — multi-tenant Field-Force + CRM + ERPNext SaaS
 
-Implements the Proman specification as a SaaS: each company signs up for its own isolated workspace.
+A multi-tenant field-force and CRM product. Each client company gets its own isolated workspace, created by the vendor's super-admin; the client's administrator completes a mandatory setup wizard before the team can use it. See docs/PRODUCT_SETUP_SPEC.md (what every client must configure) and deploy/PLATFORM_RUNBOOK.md (running it as a product).
 
 **Run locally**
 ```bash
@@ -9,7 +9,7 @@ cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --port 8021        # open http://localhost:8021
 .venv/bin/python -m pytest tests -q               # 8 integration tests
 ```
-Demo logins (workspace `proman`, password `Demo@12345`): admin@ / manager@ / rahul@ / sneha@ / imran@ `proman.demo`.
+Demo logins (a demo workspace named `proman`, password `Demo@12345`): admin@ / manager@ / rahul@ / sneha@ / imran@ `proman.demo`.
 
 ## What's built (spec → implementation)
 | Spec | Where |

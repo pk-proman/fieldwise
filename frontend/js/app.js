@@ -15,8 +15,10 @@ import * as ld from "./pages-leads.js";
 import * as c2 from "./pages-crm2.js";
 import * as ops from "./pages-ops.js";
 import * as fld from "./pages-field.js";
+import * as setup from "./pages-setup.js";
+import * as plat from "./pages-platform.js";
 
-export const S = { user: null, tenant: null, cleanup: null };
+export const S = { user: null, tenant: null, cleanup: null, kind: "client", setupPending: false, imp: false, pub: { signup_enabled: true } };
 const ROLE = { employee: 1, manager: 2, admin: 3, owner: 4 };
 const ROUTES = [
   { p: "dashboard", t: "Dashboard", i: "home", f: core.dashboard },
@@ -56,10 +58,27 @@ const ROUTES = [
   { p: "announcements", t: "Announcements", i: "bell", f: fld.announcements },
   { p: "helpdesk", t: "Helpdesk", i: "bell", f: ops.helpdesk },
   { sec: "Admin", min: "admin" },
+  { p: "setup", t: "Setup guide", i: "check", f: setup.wizard, min: "admin" },
   { p: "settings", t: "Settings", i: "cog", f: admin.settings, min: "admin" },
   { p: "recycle", t: "Recycle bin", i: "box", f: admin.recycle, min: "manager" },
 ];
 const MOBILE = ["dashboard", "attendance", "tasks", "leads", "more"];
+// Which module switches a page on. A page that is not listed is always available.
+const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", workhours: "field_force",
+  leads: "crm", followups: "crm", customers: "crm", contacts: "crm", notes: "crm", renewals: "crm", events: "crm", products: "crm", orders: "sales_docs", invoices: "sales_docs", collections: "sales_docs",
+  roster: "people", leaves: "people", expenses: "people", incentives: "people", vendors: "purchase_support", purchase: "purchase_support", dealers: "purchase_support", helpdesk: "purchase_support", calls: "calls", dialer: "calls" };
+const PLATFORM_ROUTES = [{ p: "clients", t: "Clients", i: "building", f: plat.clients }, { p: "padmins", t: "Platform admins", i: "users", f: plat.admins }];
+const SETUP_ROUTE = { p: "setup", t: "Set up your workspace", i: "check", f: setup.wizard, min: "admin" };
+/** The navigation this person gets: the vendor console, the mandatory setup wizard, or the modules their company switched on. */
+function navView() {
+  if (S.kind === "platform") return { routes: PLATFORM_ROUTES, mobile: ["clients", "padmins"] };
+  if (S.setupPending) return { routes: [SETUP_ROUTE], mobile: ["setup"] };
+  const mods = S.tenant?.settings?.modules || {};
+  const on = r => !ROUTE_MODULE[r.p] || mods[ROUTE_MODULE[r.p]] !== false;
+  const kept = ROUTES.filter(r => r.sec || on(r));
+  const routes = kept.filter((r, i) => !r.sec || (kept[i + 1] && !kept[i + 1].sec));
+  return { routes, mobile: MOBILE.filter(p => p === "more" || routes.some(r => r.p === p)) };
+}
 const allowed = r => !r.min || ROLE[S.user.role] >= ROLE[r.min];
 
 setAuthLostHandler(msg => { tracker.stop(); S.user = null; authScreen("login", msg); });
@@ -101,7 +120,14 @@ function setupPwa() {
   }
 }
 
+function applyMe(me) {
+  S.user = me.user; S.tenant = me.tenant; S.kind = me.kind || "client"; S.imp = !!me.impersonated;
+  S.setupPending = S.kind === "client" && !me.setup_complete && ["owner", "admin"].includes(me.user.role);
+}
+window.addEventListener("fw-setup-done", async () => { try { applyMe(await get("/auth/me")); shell(); location.hash = "#/dashboard"; route(); } catch (e) { fail(e); } });
+
 async function boot() {
+  try { S.pub = await get("/auth/public-config"); } catch { /* offline: keep defaults */ }
   if (isBundled()) {  // files are inside the app; links to server documents (PDFs) need the server address
     const fix = u => typeof u === "string" && u.startsWith("/api/") ? serverBase() + u : u; const wo = window.open; window.open = (u, ...r) => wo.call(window, fix(u), ...r);
     document.addEventListener("click", e => { const a = e.target.closest?.('a[href^="/api/"]'); if (a) a.href = serverBase() + a.getAttribute("href"); }, true);
@@ -109,8 +135,8 @@ async function boot() {
   if (isBundled()) { checkForUpdate(); document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); }); }
   if (location.hash.startsWith("#/reset")) return resetScreen();
   if (!session.token) return authScreen("login");
-  try { const me = await get("/auth/me"); S.user = me.user; S.tenant = me.tenant; shell(); route(); if (me.consent_required) askConsent(me.tracking_policy); }
-  catch (e) { if (e.status === 0) { document.body.insertAdjacentHTML("afterbegin", ""); S.user = JSON.parse(localStorage.getItem("fw_user") || "null"); if (S.user) { S.tenant = { name: "Offline", settings: {} }; shell(); route(); return; } } authScreen("login", e.message); }
+  try { const me = await get("/auth/me"); applyMe(me); shell(); route(); if (me.consent_required) askConsent(me.tracking_policy); }
+  catch (e) { if (e.status === 0) { document.body.insertAdjacentHTML("afterbegin", ""); S.user = JSON.parse(localStorage.getItem("fw_user") || "null"); if (S.user) { S.tenant = { name: "Offline", settings: {} }; shell(); route(); return; } } authScreen("login", String(e.message || "").replace(/^SETUP_PENDING:\s*/, "")); }
 }
 
 export function askConsent(policy) {
@@ -121,6 +147,7 @@ export function askConsent(policy) {
 }
 
 function resetScreen() {
+  const wsq = decodeURIComponent((location.hash.split("workspace=")[1] || "").split("&")[0]); if (wsq) { try { localStorage.setItem("fw_ws", wsq); } catch {} }
   const token = decodeURIComponent((location.hash.split("token=")[1] || "").split("&")[0]);
   $("#app").innerHTML = `<div class="auth"><form class="card" id="rf" novalidate><h1>Choose a new password</h1><p class="muted" style="margin:4px 0 16px">At least 8 characters, with letters and numbers.</p>
     <label class="f"><span>New password</span><input name="p1" type="password" required minlength="8" autocomplete="new-password"></label><label class="f"><span>Repeat it</span><input name="p2" type="password" required autocomplete="new-password"></label><button class="btn primary" style="width:100%" id="go">Save password</button></form></div>`;
@@ -154,7 +181,7 @@ function authScreen(mode = "login", msg = "") {
     <label class="f"><span>Email</span><input name="email" type="email" required autocomplete="username"></label>
     <label class="f"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="${signup ? "new-password" : "current-password"}"></label>
     <button class="btn primary" style="width:100%" id="go">${signup ? "Create workspace" : "Sign in"}</button>
-    ${isBundled() && !signup ? '<span id="sw"></span>' : `<p class="small muted" style="margin-top:14px;text-align:center">${signup ? 'Have a workspace? <a href="#" id="sw">Sign in</a>' : 'New company? <a href="#" id="sw">Create a workspace</a>'}</p>`}
+    ${!signup && (isBundled() || !S.pub.signup_enabled) ? '<span id="sw"></span>' : `<p class="small muted" style="margin-top:14px;text-align:center">${signup ? 'Have a workspace? <a href="#" id="sw">Sign in</a>' : 'New company? <a href="#" id="sw">Create a workspace</a>'}</p>`}
     ${signup ? "" : `<p class="small" style="margin:-4px 0 12px"><a href="#" id="fg">Forgot your password?</a></p>`}
     ${signup ? "" : `<label class="f" id="otpw" style="display:none;margin-top:10px"><span>Authenticator code</span><input name="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"></label>`}
     ${signup ? "" : `<p class="small muted" style="text-align:center">Signing in here signs you out on any other device.</p>`}</form></div>`;
@@ -171,7 +198,7 @@ function authScreen(mode = "login", msg = "") {
 }
 
 function shell() {
-  const nav = ROUTES.filter(r => r.sec ? (!r.min || ROLE[S.user.role] >= ROLE[r.min]) : allowed(r));
+  const V = navView(); const nav = V.routes.filter(r => r.sec ? (!r.min || ROLE[S.user.role] >= ROLE[r.min]) : allowed(r));
   $("#app").innerHTML = `<div class="shell"><aside class="side"><div class="brand sidelogo" aria-label="Fieldwise">${LOGO_COMPACT}</div>
     <nav class="nav" aria-label="Main">${nav.map(r => r.sec ? `<div class="sec">${r.sec}</div>` : `<a href="#/${r.p}" data-p="${r.p}">${svgIcon(r.i)}<span>${esc(r.t)}</span></a>`).join("")}</nav></aside>
     <div class="main"><header class="top"><span class="org" id="org">${orgHTML()}</span><span class="net" id="net">● Online</span><span id="qn" class="small muted"></span>
@@ -179,7 +206,10 @@ function shell() {
       <button class="btn icon right" id="bell" aria-label="Notifications">${svgIcon("bell").replace("<svg", '<svg style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8"')}</button><span id="nb"></span>
       <button class="btn sm" id="me" aria-haspopup="menu">${esc(S.user.name.split(" ")[0])} ▾</button></header>
       <main class="content" id="view" tabindex="-1"></main></div></div>
-    <nav class="mobilebar" aria-label="Primary">${MOBILE.map(p => p === "more" ? `<a href="#/more" data-p="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</a>` : (r => `<a href="#/${p}" data-p="${p}">${svgIcon(r.i)}${esc(r.t)}</a>`)(ROUTES.find(x => x.p === p))).join("")}</nav>`;
+    <nav class="mobilebar" aria-label="Primary">${V.mobile.map(p => p === "more" ? `<a href="#/more" data-p="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</a>` : (r => `<a href="#/${p}" data-p="${p}">${svgIcon(r.i)}${esc(r.t)}</a>`)(V.routes.find(x => x.p === p))).join("")}</nav>`;
+  if (S.imp) { const bar = document.createElement("div"); bar.style.cssText = "background:#fdecc8;color:#4a3300;padding:7px 14px;font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap";
+    bar.innerHTML = `<span style="flex:1"><b>Vendor access.</b> You are acting as this company's administrator. This is recorded in their audit log.</span><button class="btn sm" id="impx">Back to platform</button>`; $(".main").insertBefore(bar, $(".main").firstChild);
+    $("#impx").onclick = () => { try { const o = JSON.parse(localStorage.getItem("fw_platform_session") || "null"); if (o) { localStorage.setItem("fw_token", o.token); localStorage.setItem("fw_user", o.user); localStorage.setItem("fw_ws", o.ws); localStorage.removeItem("fw_platform_session"); } } catch {} location.hash = "#/clients"; location.reload(); }; }
   $("#me").onclick = userMenu; $("#bell").onclick = showNotifs;
   const gs = $("#gs"), gr = $("#gsr"); const route_ = { leads: "leads", customers: "customers", contacts: "contacts", quotations: "leads", orders: "orders" };
   const doSearch = debounce(async () => { const q = gs.value.trim(); if (q.length < 2) { gr.style.display = "none"; return; } try { const r = await get("/search?q=" + encodeURIComponent(q)); const groups = Object.entries(r).filter(([, v]) => v.length);
@@ -225,17 +255,18 @@ async function enrollMfa(forced) {
     modal({ title: "Set up authenticator", body, actions: [{ label: forced ? "Later" : "Cancel", close: true }, { label: "Turn on", primary: true, onClick: async () => { await post("/auth/mfa/enable", { code: $("#mc", body).value }); S.user.mfa_enabled = true; toast("Authenticator is on. You'll be asked for a code when you sign in."); } }] }); } catch (e) { fail(e); } }
 
 function moreScreen(root) {
-  root.innerHTML = `<div class="page-h"><h1>More</h1></div><div class="card"><div class="nav">${ROUTES.filter(r => r.p && allowed(r) && !MOBILE.includes(r.p)).map(r => `<a href="#/${r.p}">${svgIcon(r.i)}<span>${esc(r.t)}</span></a>`).join("")}</div></div>`;
+  root.innerHTML = `<div class="page-h"><h1>More</h1></div><div class="card"><div class="nav">${navView().routes.filter(r => r.p && allowed(r) && !navView().mobile.includes(r.p)).map(r => `<a href="#/${r.p}">${svgIcon(r.i)}<span>${esc(r.t)}</span></a>`).join("")}</div></div>`;
 }
 
 export function route() {
-  const p = (location.hash.replace(/^#\//, "") || "dashboard").split("?")[0].split("/")[0];
+  const V = navView();
+  const p = (location.hash.replace(/^#\//, "") || V.routes.find(x => x.p).p).split("?")[0].split("/")[0];
   const root = $("#view"); if (!root || !S.user) return;
   S.cleanup?.(); S.cleanup = null;
   $$(".nav a,.mobilebar a").forEach(a => a.classList.toggle("on", a.dataset.p === p));
   if (p === "more") return moreScreen(root);
-  const r = ROUTES.find(x => x.p === p && allowed(x)) || ROUTES[0];
-  document.title = `${r.t} · Fieldwise`;
+  const r = V.routes.find(x => x.p === p && allowed(x)) || V.routes.find(x => x.p && allowed(x));
+  document.title = `${r.t} · ${S.pub.product || "Fieldwise"}`;
   root.innerHTML = skeleton(5);
   Promise.resolve(r.f(root, S)).then(c => { if (typeof c === "function") S.cleanup = c; }).catch(e => { root.innerHTML = `<div class="empty"><h3>Couldn't load this page</h3><p>${esc(e.message)}</p><button class="btn" data-reload>Try again</button></div>`; });
   root.focus({ preventScroll: true });
