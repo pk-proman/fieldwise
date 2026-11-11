@@ -133,6 +133,8 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 @router.post("/logout")
 def logout(ctx: Ctx = Depends(current)):
+    if ctx.device:   # an activated phone stays registered; only the administrator removes it
+        return {"ok": True}
     ctx.user.session_id = None
     ctx.db.commit()
     return {"ok": True}
@@ -146,7 +148,7 @@ def public_config():
 
 @router.get("/me")
 def me(ctx: Ctx = Depends(current)):
-    return {"kind": ctx.tenant.kind, "setup_complete": ctx.tenant.kind != "client" or ctx.tenant.setup_completed_at is not None, "impersonated": bool(ctx.impersonated_by),"user": to_dict(ctx.user), "tenant": {"id": ctx.tenant.id, "name": ctx.tenant.name, "slug": ctx.tenant.slug,
+    return {"kind": ctx.tenant.kind, "setup_complete": ctx.tenant.kind != "client" or ctx.tenant.setup_completed_at is not None, "impersonated": bool(ctx.impersonated_by), "app_scope": ctx.device.scope if ctx.device else None, "device_id": ctx.device.id if ctx.device else None, "user": to_dict(ctx.user), "tenant": {"id": ctx.tenant.id, "name": ctx.tenant.name, "slug": ctx.tenant.slug,
             "plan": ctx.tenant.plan, "settings": {**{k: v for k, v in (ctx.tenant.settings or {}).items() if k not in ("erpnext", "secrets", "smtp", "gateways", "intake", "ai", "assignment")}, "stages": svc.stages_of(ctx.tenant)}},
             "face_enrolled": bool(ctx.user.face_ref), "consent_required": consent_needed(ctx),
             "tracking_policy": (ctx.tenant.settings or {}).get("tracking_policy") or DEFAULT_POLICY}

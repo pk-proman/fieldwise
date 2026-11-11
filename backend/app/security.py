@@ -20,11 +20,13 @@ def new_session_id() -> str:
     return secrets.token_hex(16)
 
 
-def make_token(user_id: int, tenant_id: int, session_id: str, ttl_hours: float | None = None, impersonated_by: int | None = None) -> str:
+def make_token(user_id: int, tenant_id: int, session_id: str, ttl_hours: float | None = None, impersonated_by: int | None = None, device_id: int | None = None) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=ttl_hours or TOKEN_TTL_HOURS)
     claims = {"sub": str(user_id), "tid": tenant_id, "sid": session_id, "exp": exp}
     if impersonated_by:
         claims["imp"] = impersonated_by
+    if device_id:
+        claims["did"] = device_id   # activated phone: valid while that device row is active (no daily sign-in)
     return jwt.encode(claims, SECRET_KEY, algorithm="HS256")
 
 
@@ -111,3 +113,9 @@ def read_reset_token(token: str) -> dict | None:
 
 def reset_token_matches(d: dict, password_hash: str) -> bool:
     return _hm2.compare_digest(d["p"], _hl2.sha256(password_hash.encode()).hexdigest()[:12])  # single use: the hash changes after a reset
+
+
+def hash_secret(value: str) -> str:
+    """Keyed hash for device secrets and PINs (high-entropy or attempt-limited, so a fast hash is fine)."""
+    import hashlib, hmac
+    return hmac.new(SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()

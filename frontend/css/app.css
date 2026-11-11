@@ -113,3 +113,6 @@ tbody tr:last-child td{border-bottom:0}tbody tr.click{cursor:pointer}tbody tr.cl
 @media (max-width:520px){.orglogo{height:20px;max-width:84px}}
 /* Long forms: the title and the Save/Cancel buttons stay on screen, only the fields scroll (on phones Save used to sit below the fold) */
 .modal>header,.modal>footer{flex:0 0 auto}.modal>.body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Field-only phone: the day starts on one very large Check-in / Check-out button */
+body.fieldmode .punch .btn.big{min-height:150px;font-size:26px;border-radius:22px}
+body.fieldmode #gs,body.fieldmode #gsr{display:none}

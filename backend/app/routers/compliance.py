@@ -73,6 +73,9 @@ def erase_user(uid: int, ctx: Ctx = Depends(require("admin"))):
         raise HTTPException(409, "The workspace owner can't be erased. Delete the workspace instead.")
     ctx.db.execute(delete(LocationPing).where(LocationPing.tenant_id == ctx.tid, LocationPing.user_id == uid))
     ctx.db.execute(delete(GeoEvent).where(GeoEvent.tenant_id == ctx.tid, GeoEvent.user_id == uid))
+    from ..models import RouteDay, AppDevice
+    ctx.db.execute(delete(RouteDay).where(RouteDay.tenant_id == ctx.tid, RouteDay.user_id == uid))
+    ctx.db.execute(update(AppDevice).where(AppDevice.tenant_id == ctx.tid, AppDevice.user_id == uid).values(status="revoked", revoked_reason="erased"))
     ctx.db.execute(update(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == uid).values(check_in_selfie=None, check_in_lat=None, check_in_lng=None, check_out_lat=None, check_out_lng=None))
     u.name, u.email, u.phone, u.face_ref, u.employee_code, u.erp_employee = f"Former employee {u.id}", f"erased-{u.id}@invalid.local", "", None, "", ""
     u.active, u.session_id, u.mfa_secret, u.mfa_enabled = False, None, None, False
@@ -99,6 +102,8 @@ def purge_old_data(db):
         cutoff = now - timedelta(days=max(days, 30))
         db.execute(delete(LocationPing).where(LocationPing.tenant_id == t.id, LocationPing.ts < cutoff))
         db.execute(delete(GeoEvent).where(GeoEvent.tenant_id == t.id, GeoEvent.ts < cutoff))
+    from ..models import RouteDay
+    db.execute(delete(RouteDay).where(RouteDay.day < (now - timedelta(days=400)).date()))   # daily summaries live about 13 months
     log_cut = now - timedelta(days=90)
     for M in (LoginAttempt, IntakeLog, SyncLog):
         db.execute(delete(M).where(M.created_at < log_cut))

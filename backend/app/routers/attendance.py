@@ -140,13 +140,16 @@ def check_out(body: PunchIn, ctx: Ctx = Depends(current)):
     pings = ctx.db.scalars(select(LocationPing).where(LocationPing.tenant_id == ctx.tid, LocationPing.user_id == ctx.user.id,
                                                       LocationPing.ts >= row.check_in_at, LocationPing.ts <= when,
                                                       LocationPing.lat.is_not(None), LocationPing.mock.is_(False)).order_by(LocationPing.ts)).all()
-    row.total_distance_km = round(path_km((p.lat, p.lng) for p in pings), 2)
+    from .. import routecalc
+    row.total_distance_km = routecalc.analyse(pings)["distance_km"]   # drift, jumps and silent gaps are not counted as distance
     hours = (when - row.check_in_at).total_seconds() / 3600
     if hours < 4:
         row.status = "half_day"
     if flags:
         row.flagged = "; ".join(filter(None, [row.flagged] + flags))
     ctx.db.commit()
+    from .. import routeday
+    routeday.finalize_day(ctx.db, ctx.tenant, ctx.user.id, row.day)   # route summary + expense rules for the day
     return to_dict(row)
 
 

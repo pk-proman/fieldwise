@@ -11,6 +11,7 @@ RULES = [  # (path prefix, method or None, max requests, window seconds, label)
     ("/api/auth/forgot", "POST", 5, 900, "password reset"),
     ("/api/auth/reset", "POST", 10, 900, "password reset"),
     ("/api/auth/login", "POST", 30, 60, "sign-in"),
+    ("/api/auth/activate", "POST", 20, 900, "phone activation"),
     ("/api/intake/", "POST", 1500, 60, "lead intake"),
     ("/api/public/", "GET", 120, 60, "public links"),
     ("/api/", None, 1500, 60, "requests"),

@@ -187,12 +187,7 @@ def targets(month: str | None = None, ctx: Ctx = Depends(current)):
 
 # ============================================================ overview (month-on-month, by user / manager)
 def _subtree(ctx, root: int) -> set[int]:
-    ids, frontier = {root}, {root}
-    while frontier:
-        rows = ctx.db.execute(select(User.id).where(User.tenant_id == ctx.tid, User.manager_id.in_(frontier))).all()
-        frontier = {r[0] for r in rows} - ids
-        ids |= frontier
-    return ids
+    return ctx.subtree_ids(root)
 
 
 @router.get("/overview")

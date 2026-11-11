@@ -1,6 +1,6 @@
 {
-  "versionCode": 4,
-  "versionName": "1.2.0",
+  "versionCode": 5,
+  "versionName": "1.3.0",
   "minVersionCode": 1,
-  "releaseNotes": "Works for any company workspace: sign in with your company's workspace code\nNew setup guide for company administrators\nFixed: New beat and New branch buttons, Save buttons below the screen on long forms\nTracking setup guide and stop alerts"
+  "releaseNotes": "Activate your phone once with the PIN from your administrator: no daily sign-in\nOpens straight on a large Check-in / Check-out button\nField-only app: setup and admin tools stay on the web\nCleaner route distance for travel claims"
 }

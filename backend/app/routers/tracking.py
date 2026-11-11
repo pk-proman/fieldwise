@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from ..db import SessionLocal
 from ..deps import Ctx, current, _auth
-from ..models import LocationPing, User, Attendance, Branch, Visit, Customer, DeviceHealth, utcnow
+from ..models import LocationPing, User, Attendance, Branch, Visit, Customer, DeviceHealth, RouteDay, utcnow
 from ..deps import require
 from .. import devhealth
 from ..common import to_dict, local_today, parse_day, local_day_bounds_utc
@@ -260,3 +260,117 @@ async def ws_live(ws: WebSocket, token: str = Query("")):
         pass
     finally:
         hub.unsubscribe(tid, ws)
+
+
+# ============================================================ route history (month view, scoped by the reporting hierarchy)
+def _month_bounds(month: str | None, tenant):
+    from datetime import date
+    today = local_today(tenant)
+    try:
+        y, m = (int(x) for x in (month or f"{today.year}-{today.month:02d}").split("-"))
+        first = date(y, m, 1)
+    except (ValueError, TypeError):
+        raise HTTPException(422, "Month must look like 2026-11.")
+    nxt = date(y + (m == 12), 1 if m == 12 else m + 1, 1)
+    return first, nxt
+
+
+def _row(rd: RouteDay, full=False):
+    d = {"day": rd.day.isoformat(), "distance_km": rd.distance_km, "est_km": rd.est_km, "moving_min": rd.moving_min, "stop_min": rd.stop_min, "gap_min": rd.gap_min, "points": rd.points,
+         "quality": rd.quality, "first_at": rd.first_at.isoformat() + "Z" if rd.first_at else None, "last_at": rd.last_at.isoformat() + "Z" if rd.last_at else None,
+         "stops_n": len(rd.stops or []), "expense": rd.expense}
+    if full:
+        d.update({"stops": rd.stops, "polyline": rd.polyline})
+    return d
+
+
+@router.get("/tracking/history/team")
+def history_team(month: str | None = None, manager_id: int | None = None, ctx: Ctx = Depends(current)):
+    """One level of the hierarchy: the chosen manager (default: me) and each direct report, with the whole branch under each report rolled up."""
+    first, nxt = _month_bounds(month, ctx.tenant)
+    team = set(ctx.team_ids())
+    root = manager_id or ctx.user.id
+    if root not in team:
+        raise HTTPException(403, "You can only view your own team.")
+    rows = ctx.db.execute(select(RouteDay.user_id, func.sum(RouteDay.distance_km), func.sum(RouteDay.est_km), func.count(RouteDay.id), func.avg(RouteDay.quality),
+                                 func.sum(RouteDay.stop_min), func.sum(RouteDay.moving_min)).where(
+        RouteDay.tenant_id == ctx.tid, RouteDay.day >= first, RouteDay.day < nxt, RouteDay.user_id.in_(team), RouteDay.points > 0).group_by(RouteDay.user_id)).all()
+    agg = {r[0]: r[1:] for r in rows}
+    users = {u.id: u for u in ctx.db.scalars(select(User).where(User.tenant_id == ctx.tid, User.id.in_(team)))}
+
+    def roll(ids):
+        km = est = days = q = st = mv = 0.0
+        n = 0
+        for i in ids:
+            a = agg.get(i)
+            if a:
+                km += a[0] or 0; est += a[1] or 0; days += a[2]; q += (a[3] or 0) * a[2]; n += a[2]; st += a[4] or 0; mv += a[5] or 0
+        return {"distance_km": round(km, 1), "est_km": round(est, 1), "days": int(days), "quality": round(q / n) if n else None, "stop_min": int(st), "moving_min": int(mv)}
+    out = []
+    me = users.get(root)
+    if me:
+        out.append({"user_id": me.id, "name": me.name, "role": me.role, "self": True, "people": 1, **roll([me.id])})
+    direct = ctx.direct_report_ids(root)
+    if root == ctx.user.id and ctx.is_at_least("admin"):    # the top of the organisation: people with no manager are shown too, so nobody is invisible
+        direct += [u.id for u in users.values() if u.manager_id is None and u.id != root and u.id not in direct and u.role != "owner"]
+    for rid in direct:
+        if rid not in team or rid not in users:
+            continue
+        branch = ctx.subtree_ids(rid) & team
+        out.append({"user_id": rid, "name": users[rid].name, "role": users[rid].role, "self": False, "people": len(branch), "has_team": len(branch) > 1, **roll(branch)})
+    chain, cur, seen = [], users.get(root), set()
+    while cur and cur.id not in seen and cur.id != ctx.user.id and len(chain) < 20:   # breadcrumb back up to the viewer
+        chain.insert(0, {"user_id": cur.id, "name": cur.name})
+        seen.add(cur.id)
+        cur = users.get(cur.manager_id)
+    return {"month": first.strftime("%Y-%m"), "root": {"user_id": root, "name": me.name if me else ""}, "path": chain, "rows": out}
+
+
+@router.get("/tracking/history/person")
+def history_person(user_id: int, month: str | None = None, ctx: Ctx = Depends(current)):
+    first, nxt = _month_bounds(month, ctx.tenant)
+    if user_id not in ctx.team_ids():
+        raise HTTPException(403, "You can only view your own team.")
+    rds = ctx.db.scalars(select(RouteDay).where(RouteDay.tenant_id == ctx.tid, RouteDay.user_id == user_id, RouteDay.day >= first, RouteDay.day < nxt, RouteDay.points > 0)
+                         .order_by(RouteDay.day)).all()
+    u = ctx.db.get(User, user_id)
+    return {"user": {"id": u.id, "name": u.name}, "month": first.strftime("%Y-%m"), "days": [_row(r) for r in rds],
+            "totals": {"distance_km": round(sum(r.distance_km for r in rds), 1), "est_km": round(sum(r.est_km for r in rds), 1), "days": len(rds)}}
+
+
+@router.get("/tracking/history/day")
+def history_day(user_id: int, day: str, ctx: Ctx = Depends(current)):
+    from .. import routeday
+    if user_id not in ctx.team_ids():
+        raise HTTPException(403, "You can only view your own team.")
+    d = parse_day(day, local_today(ctx.tenant))
+    rd = ctx.db.scalar(select(RouteDay).where(RouteDay.tenant_id == ctx.tid, RouteDay.user_id == user_id, RouteDay.day == d))
+    if rd is None or d >= local_today(ctx.tenant):     # today (or a day not summarised yet) is built on request
+        rd = routeday.build(ctx.db, ctx.tenant, user_id, d)
+        ctx.db.commit()
+    if rd is None:
+        return {"day": d.isoformat(), "found": False}
+    return {"found": True, **_row(rd, full=True)}
+
+
+@router.get("/tracking/history/export")
+def history_export(month: str | None = None, manager_id: int | None = None, ctx: Ctx = Depends(current)):
+    """CSV: one row per person per day for everyone under the chosen manager (default: me and my whole team)."""
+    import csv, io
+    from fastapi.responses import Response
+    first, nxt = _month_bounds(month, ctx.tenant)
+    team = set(ctx.team_ids())
+    root = manager_id or ctx.user.id
+    if root not in team:
+        raise HTTPException(403, "You can only view your own team.")
+    ids = ctx.subtree_ids(root) & team
+    names = {u.id: (u.name, u.employee_code) for u in ctx.db.scalars(select(User).where(User.tenant_id == ctx.tid, User.id.in_(ids)))}
+    rds = ctx.db.scalars(select(RouteDay).where(RouteDay.tenant_id == ctx.tid, RouteDay.user_id.in_(ids), RouteDay.day >= first, RouteDay.day < nxt, RouteDay.points > 0)
+                         .order_by(RouteDay.user_id, RouteDay.day)).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["employee", "code", "date", "tracked_km", "estimated_km_not_counted", "moving_min", "stop_min", "silent_gap_min", "tracking_quality", "stops", "auto_expense_total"])
+    for r in rds:
+        n, c = names.get(r.user_id, ("", ""))
+        w.writerow([n, c, r.day.isoformat(), r.distance_km, r.est_km, r.moving_min, r.stop_min, r.gap_min, r.quality, len(r.stops or []), (r.expense or {}).get("total", "")])
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="routes-{first:%Y-%m}.csv"'})

@@ -116,6 +116,13 @@ def _daily(db):
     except Exception:
         db.rollback()
         log.exception("beat daily jobs failed")
+    from . import routeday
+    for t in db.scalars(select(Tenant).where(Tenant.active.is_(True), Tenant.kind == "client")).all():
+        try:
+            routeday.finalize_recent(db, t, 2)
+        except Exception:
+            db.rollback()
+            log.exception("route day rebuild failed for tenant %s", t.id)
     cutoff = utcnow() - timedelta(days=config.RECYCLE_DAYS)
     for m in (Lead, Customer, Contact, Task, ExpenseClaim, Product, Branch):
         db.execute(delete(m).where(m.deleted_at.is_not(None), m.deleted_at < cutoff))

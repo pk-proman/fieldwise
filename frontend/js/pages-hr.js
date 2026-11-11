@@ -33,13 +33,14 @@ export async function leaves(root, S) {
 export async function expenses(root, S) {
   const cur = S.tenant.settings.currency || "INR"; let rows = [], scope = "mine";
   root.innerHTML = `<div class="page-h"><h1>Expenses</h1><div class="right row"><button class="btn sm" id="da">🍽 Claim daily allowance</button><button class="btn sm" id="fuel">⛽ Claim fuel from GPS</button><button class="btn primary" id="new">+ New claim</button></div></div>
+    <div id="autobar"></div>
     <div class="tabs"><button class="on" data-s="mine">My claims</button>${isMgr(S) ? '<button data-s="team">Team claims</button>' : ""}</div>
     <div class="row" style="margin-bottom:12px"><select id="fs" style="width:auto"><option value="">Any status</option>${["pending", "approved", "rejected", "paid"].map(s => `<option>${s}</option>`).join("")}</select><select id="fc" style="width:auto"><option value="">Any category</option>${["fuel", "travel", "food", "lodging", "other"].map(s => `<option>${s}</option>`).join("")}</select><button class="btn sm" id="exp">Export CSV</button>
     <span id="bulk" class="row right" style="display:none"><button class="btn sm primary" id="ba">Approve selected</button><button class="btn sm danger" id="br">Reject selected</button></span></div><div id="list">${skeleton(4)}</div>`;
   const load = async () => {
     rows = await get("/expenses" + qs({ scope, status: $("#fs").value, category: $("#fc").value }));
     const total = rows.reduce((a, r) => a + r.amount, 0);
-    const cols = [{ h: "Date", f: r => fmtD(r.day) }, ...(scope === "team" ? [{ h: "Employee", f: r => esc(r.user_name) }] : []), { h: "Category", f: r => cap(r.category) }, { h: "Amount", f: r => `<strong class="mono">${money(r.amount, r.currency)}</strong>` }, { h: "Details", f: r => `${esc(r.description)}${r.distance_km ? ` <span class="chip">${r.distance_km} km</span>` : ""}` },
+    const cols = [{ h: "Date", f: r => fmtD(r.day) }, ...(scope === "team" ? [{ h: "Employee", f: r => esc(r.user_name) }] : []), { h: "Category", f: r => cap(r.category) + (r.source === "auto" ? " " + chip("Auto", "info") : "") }, { h: "Amount", f: r => `<strong class="mono">${money(r.amount, r.currency)}</strong>` }, { h: "Details", f: r => `${esc(r.description)}${r.distance_km ? ` <span class="chip">${r.distance_km} km</span>` : ""}` },
       { h: "Receipt", f: r => r.receipt ? `<a href="${fileUrl(r.receipt)}" target="_blank" rel="noopener">View</a>` : "—" }, { h: "Status", f: r => chip(cap(r.status), statusKind(r.status)) + (r.levels_required > 1 ? `<div class="small muted">${r.status === "pending" ? `Level ${r.level} of ${r.levels_required} approved` : (r.approvals || []).map(a => esc(a.name)).join(" → ")}</div>` : "") + (r.erp_ref ? `<div class="small muted">ERP ${esc(r.erp_ref)}</div>` : "") },
       { h: "", f: r => scope === "mine" && r.status === "pending" ? `<button class="btn sm" data-w="${r.id}">Withdraw</button>` : scope === "team" && r.status === "approved" ? `<button class="btn sm" data-pay="${r.id}">Mark paid</button>` : "" }];
     $("#list").innerHTML = (rows.length ? `<div class="small muted" style="margin-bottom:6px">${rows.length} claim(s) · ${money(total, cur)}</div>` : "") + table(cols, rows, { sel: scope === "team", empty: "No expense claims here." });
@@ -63,4 +64,9 @@ export async function expenses(root, S) {
     modal({ title: "New expense claim", onMount: el => ocrHook(el), body: fieldsHTML(f) + `<label class="f"><span>Receipt photo</span><input type="file" id="rf" accept="image/*,application/pdf" capture="environment"><span class="hint">A timestamp and location watermark is added automatically.</span></label>`,
       actions: [{ label: "Cancel", close: true }, { label: "Submit", primary: true, onClick: async el => { validate(el, f); const d = readFields(el, f); const fd = new FormData(); Object.entries(d).forEach(([k, v]) => v != null && fd.append(k, v)); const rf = $("#rf", el).files[0]; if (rf) { fd.append("receipt", rf); const p = await here().catch(() => null); if (p) { fd.append("lat", p.lat); fd.append("lng", p.lng); } } await api("POST", "/expenses", fd); toast("Claim submitted."); load(); } }] }); };
   await load();
+  // What the expense rules computed from my route (also in shadow mode, so I can compare with my own records)
+  get("/expenses/auto-preview").then(r => { if (!r.found || r.mode === "off") return;
+    const c = r.calc, shadow = r.mode === "shadow";
+    $("#autobar").innerHTML = `<div class="card" style="padding:10px 12px;margin-bottom:12px"><b>Today's route:</b> ${r.tracked_km} km tracked${r.estimated_km ? ` (+${r.estimated_km} km estimated, not counted)` : ""} · rules give ${money(c.total, cur)}
+      (${money(c.fuel, cur)} travel${c.allowance ? ` + ${money(c.allowance, cur)} ${c.allowance_kind} allowance` : ""})${shadow ? ' <span class="chip">Preview only: nothing is paid yet</span>' : " · claim is created automatically after check-out"}${c.notes.length ? `<div class="small muted">${esc(c.notes.join("; "))}</div>` : ""}</div>`; }).catch(() => {});
 }

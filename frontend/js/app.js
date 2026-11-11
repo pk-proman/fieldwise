@@ -4,6 +4,7 @@ import { $, $$, esc, toast, fail, svgIcon, fmtDT, skeleton, modal, debounce } fr
 import * as tracker from "./tracker.js";
 import { isBundled, serverBase, setServer, DEFAULT_SERVER } from "./config.js";
 import { checkForUpdate } from "./appupdate.js";
+import { activationScreen, isActivated, renewDevice, forgetDevice } from "./activate.js";
 import * as core from "./pages-core.js";
 import * as crm from "./pages-crm.js";
 import * as hr from "./pages-hr.js";
@@ -17,6 +18,7 @@ import * as ops from "./pages-ops.js";
 import * as fld from "./pages-field.js";
 import * as setup from "./pages-setup.js";
 import * as plat from "./pages-platform.js";
+import * as rh from "./pages-routehist.js";
 
 export const S = { user: null, tenant: null, cleanup: null, kind: "client", setupPending: false, imp: false, pub: { signup_enabled: true } };
 const ROLE = { employee: 1, manager: 2, admin: 3, owner: 4 };
@@ -44,6 +46,7 @@ const ROUTES = [
   { p: "meetings", t: "Meetings", i: "handshake", f: sales.meetings },
   { p: "visits", t: "Visits", i: "pin", f: crm.visits },
   { p: "routes", t: "Routes", i: "route", f: crm.routes },
+  { p: "routehist", t: "Route history", i: "route", f: rh.routehist },
   { p: "workhours", t: "Work hours", i: "clock", f: fld.workhours },
   { sec: "People" },
   { p: "roster", t: "Roster", i: "cal", f: fld.roster },
@@ -63,8 +66,11 @@ const ROUTES = [
   { p: "recycle", t: "Recycle bin", i: "box", f: admin.recycle, min: "manager" },
 ];
 const MOBILE = ["dashboard", "attendance", "tasks", "leads", "more"];
+// A phone activated with a field-only PIN gets just the day-to-day screens; setup, admin and team tools exist only on the web (or with a manager PIN).
+const FIELD_ROUTES = ["attendance", "visits", "tasks", "beats", "leads", "followups", "expenses", "leaves", "announcements"];
+const FIELD_NAMES = { attendance: "Check-in" };
 // Which module switches a page on. A page that is not listed is always available.
-const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", workhours: "field_force",
+const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", routehist: "field_force", workhours: "field_force",
   leads: "crm", followups: "crm", customers: "crm", contacts: "crm", notes: "crm", renewals: "crm", events: "crm", products: "crm", orders: "sales_docs", invoices: "sales_docs", collections: "sales_docs",
   roster: "people", leaves: "people", expenses: "people", incentives: "people", vendors: "purchase_support", purchase: "purchase_support", dealers: "purchase_support", helpdesk: "purchase_support", calls: "calls", dialer: "calls" };
 const PLATFORM_ROUTES = [{ p: "clients", t: "Clients", i: "building", f: plat.clients }, { p: "padmins", t: "Platform admins", i: "users", f: plat.admins }];
@@ -73,6 +79,11 @@ const SETUP_ROUTE = { p: "setup", t: "Set up your workspace", i: "check", f: set
 function navView() {
   if (S.kind === "platform") return { routes: PLATFORM_ROUTES, mobile: ["clients", "padmins"] };
   if (S.setupPending) return { routes: [SETUP_ROUTE], mobile: ["setup"] };
+  if (S.appScope === "field") {
+    const routes = ROUTES.filter(r => FIELD_ROUTES.includes(r.p)).map(r => ({ ...r, t: FIELD_NAMES[r.p] || r.t, min: undefined }));
+    routes.sort((a, b) => FIELD_ROUTES.indexOf(a.p) - FIELD_ROUTES.indexOf(b.p));
+    return { routes, mobile: ["attendance", "visits", "tasks", "expenses", "more"] };
+  }
   const mods = S.tenant?.settings?.modules || {};
   const on = r => !ROUTE_MODULE[r.p] || mods[ROUTE_MODULE[r.p]] !== false;
   const kept = ROUTES.filter(r => r.sec || on(r));
@@ -81,7 +92,12 @@ function navView() {
 }
 const allowed = r => !r.min || ROLE[S.user.role] >= ROLE[r.min];
 
-setAuthLostHandler(msg => { tracker.stop(); S.user = null; authScreen("login", msg); });
+setAuthLostHandler(msg => { tracker.stop(); S.user = null; if (/DEVICE_REVOKED/.test(msg || "")) forgetDevice(); entry(String(msg || "").replace(/^DEVICE_REVOKED:\s*/, "")); });
+/** First screen when nobody is signed in: the native app asks for the activation PIN; the web asks for email + password. */
+function entry(msg = "") {
+  if (isBundled()) return activationScreen(msg, { onDone: () => boot(), onEmailSignIn: () => authScreen("login") });
+  authScreen("login", msg);
+}
 
 // ---- PWA: service worker, "update available" bar, install button -------------------------------
 let installEvt = null;
@@ -121,7 +137,7 @@ function setupPwa() {
 }
 
 function applyMe(me) {
-  S.user = me.user; S.tenant = me.tenant; S.kind = me.kind || "client"; S.imp = !!me.impersonated;
+  S.user = me.user; S.tenant = me.tenant; S.kind = me.kind || "client"; S.imp = !!me.impersonated; S.appScope = me.app_scope || null; document.body.classList.toggle("fieldmode", S.appScope === "field");
   S.setupPending = S.kind === "client" && !me.setup_complete && ["owner", "admin"].includes(me.user.role);
 }
 window.addEventListener("fw-setup-done", async () => { try { applyMe(await get("/auth/me")); shell(); location.hash = "#/dashboard"; route(); } catch (e) { fail(e); } });
@@ -134,7 +150,8 @@ async function boot() {
   } else { setupPwa(); }
   if (isBundled()) { checkForUpdate(); document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); }); }
   if (location.hash.startsWith("#/reset")) return resetScreen();
-  if (!session.token) return authScreen("login");
+  if (!session.token) return entry();
+  if (isActivated() && !(await renewDevice())) return entry("This phone is no longer registered. Ask your administrator for a new PIN.");
   try { const me = await get("/auth/me"); applyMe(me); shell(); route(); if (me.consent_required) askConsent(me.tracking_policy); }
   catch (e) { if (e.status === 0) { document.body.insertAdjacentHTML("afterbegin", ""); S.user = JSON.parse(localStorage.getItem("fw_user") || "null"); if (S.user) { S.tenant = { name: "Offline", settings: {} }; shell(); route(); return; } } authScreen("login", String(e.message || "").replace(/^SETUP_PENDING:\s*/, "")); }
 }
@@ -238,14 +255,20 @@ function userMenu() {
   const old = $("#pop"); if (old) return old.remove();
   const pop = document.createElement("div"); pop.id = "pop"; pop.className = "card pop"; pop.style.width = "240px";
   pop.innerHTML = `<div style="margin-bottom:8px"><strong>${esc(S.user.name)}</strong><div class="small muted">${esc(S.user.email)} · ${esc(S.user.role)}</div></div>
-   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for check-in</button>${isBundled() ? '<button class="btn" style="width:100%;margin-bottom:6px" id="trk">Tracking setup &amp; health</button>' : ""}<button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`;
+   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for check-in</button>${isBundled() ? '<button class="btn" style="width:100%;margin-bottom:6px" id="trk">Tracking setup &amp; health</button>' : ""}${S.appScope ? '<button class="btn" style="width:100%;margin-bottom:6px" id="pc">My mobile number changed</button>' : `<button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`}`;
   document.body.appendChild(pop);
   const close = e => { if (!pop.contains(e.target) && e.target.id !== "me") { pop.remove(); document.removeEventListener("mousedown", close); } }; setTimeout(() => document.addEventListener("mousedown", close));
   $("#th", pop).onclick = () => { const r = document.documentElement, dark = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme:dark)").matches); r.dataset.theme = dark ? "light" : "dark"; };
-  $("#lo", pop).onclick = async () => { try { await post("/auth/logout"); } catch {} tracker.stop(); session.clear(); S.user = null; authScreen("login"); };
-  $("#mf", pop).onclick = () => { pop.remove(); enrollMfa(false); };
+  $("#lo")?.addEventListener("click", async () => { try { await post("/auth/logout"); } catch {} tracker.stop(); session.clear(); S.user = null; entry(); });
+  $("#pc", pop)?.addEventListener("click", () => { pop.remove(); phoneChange(); });
+  $("#mf", pop)?.addEventListener("click", () => { pop.remove(); enrollMfa(false); });
   $("#trk", pop)?.addEventListener("click", async () => { pop.remove(); (await import("./trackwizard.js")).openWizard(); });
   $("#fe", pop).onclick = async () => { pop.remove(); try { const { captureSelfie } = await import("./ui.js"); const img = await captureSelfie(); await post("/auth/face-enroll", { image: img }); toast("Face enrolled."); } catch (e) { fail(e); } };
+}
+
+function phoneChange() {
+  modal({ title: "Mobile number changed?", body: `<p class="muted">Tell your administrator your new number. Nothing changes on this phone until they give you a new PIN.</p><label class="f"><span>New mobile number</span><input id="npn" type="tel" inputmode="tel" autocomplete="tel"></label>`,
+    actions: [{ label: "Cancel", close: true }, { label: "Send to administrator", primary: true, onClick: async el => { const r = await post("/auth/device/phone-change", { phone: $("#npn", el).value }); toast(r.message); } }] });
 }
 
 async function enrollMfa(forced) {

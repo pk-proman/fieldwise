@@ -241,13 +241,8 @@ def _visible(ctx: Ctx, a: Announcement) -> bool:
 
 
 def _in_subtree(ctx: Ctx, root: int) -> bool:
-    cur, seen = ctx.user, set()
-    while cur and cur.id not in seen:
-        if cur.id == root or cur.manager_id == root:
-            return True
-        seen.add(cur.id)
-        cur = ctx.db.get(User, cur.manager_id) if cur.manager_id else None
-    return False
+    """True when the current user is `root` or reports (directly or not) to `root`."""
+    return ctx.user.id in ctx.subtree_ids(root)
 
 
 @router.get("/announcements")

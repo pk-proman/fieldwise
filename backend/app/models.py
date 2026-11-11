@@ -58,6 +58,7 @@ class User(TenantMixin, Base):
     mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     shift_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vehicle: Mapped[str] = mapped_column(String(20), default="")   # bike | car | public | other: picks the travel rate in the expense rules
     consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # accepted the location-tracking notice
     consent_version: Mapped[str] = mapped_column(String(20), default="")
     __table_args__ = (Index("ux_user_tenant_email", "tenant_id", "email", unique=True),)
@@ -106,6 +107,38 @@ class LocationPing(TenantMixin, Base):
     mock: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class AppDevice(TenantMixin, Base):
+    """A phone that was activated with a PIN. The app keeps a random secret generated at activation; only its hash is stored here."""
+    __tablename__ = "app_devices"
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    secret_hash: Mapped[str] = mapped_column(String(64))
+    scope: Mapped[str] = mapped_column(String(10), default="field")      # field = check-in, visits, tasks, expenses only | manager = also team tools
+    status: Mapped[str] = mapped_column(String(10), default="active")    # active | revoked
+    label: Mapped[str] = mapped_column(String(200), default="")
+    model: Mapped[str] = mapped_column(String(80), default="")
+    app_version: Mapped[str] = mapped_column(String(20), default="")
+    phone: Mapped[str] = mapped_column(String(30), default="")           # the mobile number it was activated for
+    pending_phone: Mapped[str] = mapped_column(String(30), default="")   # change requested from the app, waiting for the administrator
+    activated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[str] = mapped_column(String(60), default="")
+
+
+class ActivationPin(TenantMixin, Base):
+    """One-time PIN the administrator gives a field member. Valid only for the registered mobile number, for a short time, a few tries."""
+    __tablename__ = "activation_pins"
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    phone: Mapped[str] = mapped_column(String(15), index=True)           # digits only, last 10
+    pin_hash: Mapped[str] = mapped_column(String(64))
+    scope: Mapped[str] = mapped_column(String(10), default="field")
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class DeviceHealth(TenantMixin, Base):
     """What the phone last told us about whether background tracking can survive (permissions, battery restriction, brand). One row per user."""
     __tablename__ = "device_health"
@@ -141,6 +174,28 @@ class LeaveRequest(TenantMixin, Base):
     decision_note: Mapped[str] = mapped_column(String(300), default="")
 
 
+class RouteDay(TenantMixin, Base):
+    """One person's day of travel, cleaned and summarised from the raw GPS breadcrumbs. Kept much longer than the raw points (about 13 months)."""
+    __tablename__ = "route_days"
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    distance_km: Mapped[float] = mapped_column(Float, default=0)        # tracked (counted) distance
+    est_km: Mapped[float] = mapped_column(Float, default=0)             # estimated across silent gaps, never counted unless the workspace chooses to
+    moving_min: Mapped[int] = mapped_column(Integer, default=0)
+    stop_min: Mapped[int] = mapped_column(Integer, default=0)
+    gap_min: Mapped[int] = mapped_column(Integer, default=0)
+    points: Mapped[int] = mapped_column(Integer, default=0)
+    quality: Mapped[int] = mapped_column(Integer, default=0)            # 0-100
+    far_km: Mapped[float] = mapped_column(Float, default=0)             # furthest point from the day's start
+    first_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stops: Mapped[list] = mapped_column(JSON, default=list)
+    polyline: Mapped[list] = mapped_column(JSON, default=list)
+    expense: Mapped[dict | None] = mapped_column(JSON, nullable=True)   # what the expense rules computed for this day (shadow mode shows it without creating claims)
+    built_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    __table_args__ = (Index("ux_routeday_user_day", "tenant_id", "user_id", "day", unique=True),)
+
+
 class ExpenseClaim(TenantMixin, Base):
     __tablename__ = "expense_claims"
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
@@ -158,6 +213,7 @@ class ExpenseClaim(TenantMixin, Base):
     level: Mapped[int] = mapped_column(Integer, default=0)  # approvals completed
     levels_required: Mapped[int] = mapped_column(Integer, default=1)
     approvals: Mapped[list] = mapped_column(JSON, default=list)  # [{by, name, at, note}]
+    source: Mapped[str] = mapped_column(String(10), default="manual")   # manual | auto (computed from the day's route and the expense rules)
 
 
 class Customer(TenantMixin, Base):

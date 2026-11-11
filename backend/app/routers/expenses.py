@@ -35,6 +35,11 @@ async def create(day: str = Form(...), category: str = Form(...), amount: float 
     d = parse_day(day, local_today(ctx.tenant))
     if d > local_today(ctx.tenant):
         raise HTTPException(422, "Expense date cannot be in the future.")
+    if category == "fuel":
+        auto = ctx.db.scalar(select(ExpenseClaim.id).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == ctx.user.id, ExpenseClaim.day == d, ExpenseClaim.category == "fuel",
+                                                           ExpenseClaim.source == "auto", ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)))
+        if auto:
+            raise HTTPException(409, "A fuel claim for that day was already created automatically from your route. Ask your manager if it needs correcting.")
     path = None
     if receipt and receipt.filename:
         raw = await receipt.read()
@@ -77,6 +82,68 @@ def fuel_auto(body: FuelIn, ctx: Ctx = Depends(current)):
     ctx.db.add(e)
     ctx.db.commit()
     return to_dict(e)
+
+
+class PolicyIn(BaseModel):
+    mode: str = "off"                       # off | shadow | on
+    include_estimated: bool = False
+    default: dict = {}
+    by_designation: dict = {}
+    by_role: dict = {}
+    by_vehicle: dict = {}
+
+
+@router.get("/policy")
+def get_policy(ctx: Ctx = Depends(require("admin"))):
+    from ..routeday import POLICY_DEFAULT, policy_for
+    pol = (ctx.tenant.settings or {}).get("expense_policy") or {}
+    return {"mode": pol.get("mode", "off"), "include_estimated": bool(pol.get("include_estimated")), "default": {k: policy_for(ctx.tenant, type("U", (), {"designation_id": None})())[k] for k in POLICY_DEFAULT},
+            "by_designation": pol.get("by_designation") or {}, "by_role": pol.get("by_role") or {}, "by_vehicle": pol.get("by_vehicle") or {}}
+
+
+@router.put("/policy")
+def put_policy(body: PolicyIn, ctx: Ctx = Depends(require("admin"))):
+    from ..routeday import KEYS
+    if body.mode not in ("off", "shadow", "on"):
+        raise HTTPException(422, "Mode must be off, shadow or on.")
+    def clean(d):
+        out = {}
+        for k, v in (d or {}).items():
+            if k in KEYS and v not in (None, ""):
+                try:
+                    f = float(v)
+                except (TypeError, ValueError):
+                    raise HTTPException(422, f"{k} must be a number.")
+                if f < 0 or f > 1_000_000:
+                    raise HTTPException(422, f"{k} is out of range.")
+                out[k] = f
+        return out
+    st = dict(ctx.tenant.settings or {})
+    st["expense_policy"] = {"mode": body.mode, "include_estimated": body.include_estimated, "default": clean(body.default),
+                            "by_designation": {str(k): clean(v) for k, v in (body.by_designation or {}).items() if str(k).isdigit()},
+                            "by_role": {k: clean(v) for k, v in (body.by_role or {}).items() if k in ("employee", "manager", "admin")},
+                            "by_vehicle": {k: clean(v) for k, v in (body.by_vehicle or {}).items() if k in ("bike", "car", "public", "other")}}
+    ctx.tenant.settings = st
+    from ..audit import audit
+    audit(ctx, "expense.policy", "tenant", ctx.tid, f"mode={body.mode}")
+    ctx.db.commit()
+    return get_policy(ctx)
+
+
+@router.get("/auto-preview")
+def auto_preview(day: str | None = None, ctx: Ctx = Depends(current)):
+    """What the expense rules computed from my route for a day (shown to me in shadow mode too, so I can compare with my own records)."""
+    from ..models import RouteDay
+    from .. import routeday
+    d = parse_day(day, local_today(ctx.tenant))
+    rd = routeday.build(ctx.db, ctx.tenant, ctx.user.id, d)
+    if rd is None:
+        return {"day": d.isoformat(), "found": False}
+    att = ctx.db.scalar(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == ctx.user.id, Attendance.day == d))
+    res = routeday.compute_expense(ctx.tenant, ctx.user, rd, att)
+    mode = res["mode"]
+    ctx.db.commit()
+    return {"day": d.isoformat(), "found": True, "mode": mode, "tracked_km": rd.distance_km, "estimated_km": rd.est_km, "quality": rd.quality, "calc": res}
 
 
 @router.get("")

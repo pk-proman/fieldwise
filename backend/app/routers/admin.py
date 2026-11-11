@@ -14,6 +14,7 @@ from ..audit import audit
 from .. import config
 
 router = APIRouter(tags=["admin"])
+VEHICLES = ("", "bike", "car", "public", "other")
 
 # ------------------------------- Users & hierarchy -------------------------------
 @router.get("/users")
@@ -34,6 +35,7 @@ class UserIn(BaseModel):
     branch_id: int | None = None
     territory: str = ""
     employee_code: str = ""
+    vehicle: str = ""
     active: bool = True
 
 
@@ -41,8 +43,10 @@ def _check_hierarchy(ctx: Ctx, uid: int | None, manager_id: int | None):
     if not manager_id:
         return
     m = ctx.db.get(User, manager_id)
-    if not m or m.tenant_id != ctx.tid:
+    if not m or m.tenant_id != ctx.tid or m.deleted_at:
         raise HTTPException(422, "Reporting manager not found.")
+    if not m.active:
+        raise HTTPException(422, f"{m.name} is disabled, so cannot be a reporting manager.")
     cur = m
     for _ in range(50):  # reject cycles
         if uid and cur.id == uid:
@@ -72,7 +76,7 @@ def create_user(body: UserIn, ctx: Ctx = Depends(require("admin"))):
     if body.branch_id:
         own(ctx, Branch, body.branch_id, "Branch")
     u = User(tenant_id=ctx.tid, email=body.email.lower(), name=body.name, phone=body.phone, password_hash=hash_password(body.password),
-             role=body.role, manager_id=body.manager_id, branch_id=body.branch_id, territory=body.territory, employee_code=body.employee_code, active=body.active)
+             role=body.role, manager_id=body.manager_id, branch_id=body.branch_id, territory=body.territory, employee_code=body.employee_code, vehicle=body.vehicle if body.vehicle in VEHICLES else "", active=body.active)
     ctx.db.add(u)
     ctx.db.flush()
     audit(ctx, "user.create", "user", u.id, f"{u.email} as {u.role}")
@@ -94,9 +98,9 @@ def update_user(uid: int, body: dict, ctx: Ctx = Depends(require("admin"))):
         if body.get(k):
             own(ctx, M, body[k], k.replace("_id", "").title())
     changed = [k for k in ("role", "active", "manager_id") if k in body and getattr(u, k) != body[k]]
-    for k in ("name", "phone", "role", "manager_id", "branch_id", "territory", "employee_code", "active", "department_id", "designation_id", "shift_id"):
+    for k in ("name", "phone", "role", "manager_id", "branch_id", "territory", "employee_code", "active", "department_id", "designation_id", "shift_id", "vehicle"):
         if k in body:
-            setattr(u, k, body[k])
+            setattr(u, k, body[k] if k != "vehicle" or body[k] in VEHICLES else "")
     if changed:
         audit(ctx, "user.update", "user", u.id, ", ".join(f"{k}={body[k]}" for k in changed))
     if body.get("password"):
@@ -108,6 +112,12 @@ def update_user(uid: int, body: dict, ctx: Ctx = Depends(require("admin"))):
         u.session_id = None
     if body.get("active") is False:
         u.session_id = None  # force sign-out
+        # Their team must not be left without a manager: move direct reports up one level
+        moved = list(ctx.db.scalars(select(User).where(User.tenant_id == ctx.tid, User.manager_id == u.id, User.deleted_at.is_(None))))
+        for r in moved:
+            r.manager_id = u.manager_id
+        if moved:
+            audit(ctx, "user.reassign_reports", "user", u.id, f"{len(moved)} reports moved to manager id {u.manager_id}")
     ctx.db.commit()
     return to_dict(u)
 
@@ -160,7 +170,7 @@ def del_branch(bid: int, ctx: Ctx = Depends(require("admin"))):
 SETTING_KEYS = {"currency", "timezone", "work_start", "work_end", "late_grace_min", "weekly_off", "fuel_rate_per_km", "fuel_daily_cap",
                 "geofence_default_m", "enforce_geofence", "checkout_geofence", "block_mock_location", "require_face", "require_visit_otp",
                 "map_style", "labels", "task_statuses", "waiting_alert_min", "gps_off_alert_min", "mom_recipients_default", "page_headers",
-                "discount_approval_pct", "qualify_min_score", "auto_followup_days", "stage_probability", "dcr_digest", "session_hours", "mfa_mode", "auto_regret_days", "notify_arrivals", "require_visit_photo", "require_tracking_consent", "tracking_policy", "tracking_policy_version", "ping_retention_days"}
+                "team_label", "discount_approval_pct", "qualify_min_score", "auto_followup_days", "stage_probability", "dcr_digest", "session_hours", "mfa_mode", "auto_regret_days", "notify_arrivals", "require_visit_photo", "require_tracking_consent", "tracking_policy", "tracking_policy_version", "ping_retention_days"}
 
 
 @router.get("/settings")
