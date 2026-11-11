@@ -40,10 +40,10 @@ export async function beats(root, S) {
 
   async function plans() {
     const [list, users, custs] = await Promise.all([get("/beats"), get("/users"), get("/crm/customers?limit=500").then(r => r.items)]);
-    pane.innerHTML = `<div class="row" style="margin-bottom:12px"><span class="muted">A beat is a recurring route: customers, in order, on set weekdays. Visits are generated 14 days ahead; holidays and approved leave are skipped.</span><button class="btn primary right" id="nb">+ New beat</button></div>` +
+    pane.innerHTML = `<div class="row" style="margin-bottom:12px"><span class="muted">A beat is a recurring route: customers, in order, on set weekdays. Visits are generated 14 days ahead; holidays and approved leave are skipped.</span><button class="btn primary right" id="newbeat">+ New beat</button></div>` +
       table([{ h: "Beat", f: r => `<strong>${esc(r.name)}</strong><div class="small muted">${esc(r.territory)}</div>` }, { h: "Executive", f: r => esc(r.user_name) }, { h: "Schedule", f: r => r.days.map(d => chip(DAYS[d])).join(" ") + (r.every_weeks > 1 ? `<div class="small muted">every ${r.every_weeks} weeks</div>` : "") }, { h: "Customers", f: r => `${r.customers.length}<div class="small muted">${esc(r.customers.slice(0, 3).map(c => c.name).join(", "))}${r.customers.length > 3 ? "…" : ""}</div>` }, { h: "Status", f: r => r.active ? chip("Active", "ok") : chip("Paused", "warn") }], list, { onRow: true, empty: "No beats yet. Create one for each field executive." });
     const rows = list; $$("tbody tr[data-i]", pane).forEach(tr => tr.onclick = () => form(rows[+tr.dataset.i]));
-    $("#nb").onclick = () => form(null);
+    $("#newbeat").onclick = () => form(null);
     function form(b) {
       const sel = [...(b?.customer_ids || [])], body = document.createElement("div");
       body.innerHTML = `<div class="formgrid"><label class="f"><span>Beat name *</span><input id="bn" value="${esc(b?.name || "")}" placeholder="e.g. Andheri - Monday"></label><label class="f"><span>Field executive *</span><select id="bx">${users.filter(u => u.active !== false).map(u => `<option value="${u.id}" ${(b?.user_id || S.user.id) === u.id ? "selected" : ""}>${esc(u.name)}</option>`).join("")}</select></label>

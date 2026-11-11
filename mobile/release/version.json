@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
+  "versionCode": 3,
+  "versionName": "1.1.1",
   "minVersionCode": 1,
-  "releaseNotes": "Tracking setup guide: checks location, notifications, battery and autostart settings for your phone\nWarns you, and tells your manager why, when tracking stops\nTracking now also reports when you are standing still\nFixes native tracking and fingerprint unlock not starting in the app"
+  "releaseNotes": "Fixed: the + New beat and + New branch buttons did nothing\nFixed: Save and Cancel buttons were hidden below the screen on long forms\nTracking setup guide, stop alerts and standing-still heartbeat (from 1.1.0)"
 }
