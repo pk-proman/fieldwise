@@ -9,7 +9,7 @@ from . import config, hub, scheduler
 from .db import Base, engine
 from .migrate import ensure_schema, backfill
 from . import models  # noqa: F401  (register tables)
-from .routers import auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance, team, aiq
+from .routers import auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance, team, aiq, appdist
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,6 +32,7 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_meth
 
 for r in (auth, attendance, tracking, crm, tasks, visits, leaves, expenses, admin, reports, erp, sales, orders, beats, crmx, docs, comms, intake, people, purchase, ai, field, fieldx, compliance, team, aiq):
     app.include_router(r.router, prefix="/api")
+app.include_router(appdist.router)  # /download page and /api/app/version (no prefix: paths are spelled out)
 
 
 @app.get("/api/health")

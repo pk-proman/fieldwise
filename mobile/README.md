@@ -10,12 +10,13 @@ The Fieldwise web app packaged as a native app with Capacitor. The web files are
 
 ## Build an Android APK (no Android Studio needed)
 ```bash
-cd mobile
-npm install
-./scripts/build-apk.sh        # downloads JDK 17 + Android SDK into mobile/.tools, builds dist/Fieldwise-debug.apk
+cd mobile && npm install
+./scripts/build-apk.sh debug      # test build -> dist/Fieldwise-debug.apk
+./scripts/build-apk.sh            # signed release build -> dist/Fieldwise-<version>.apk (needs the release key)
 ```
-Running the script **accepts Google's Android SDK licence on your behalf**; `mobile/.tools` can be deleted to remove everything it installed. Copy `dist/Fieldwise-debug.apk` to a phone (allow "install unknown apps") or `adb install`.
-This is a **debug** build (not for the Play Store). For release: create a keystore, `./gradlew bundleRelease`, sign it, and complete Google Play's background-location declaration (a prominent in-app disclosure and a review are required).
+First run downloads JDK 21 and the Android SDK (platform 36) into `mobile/.tools` and **accepts Google's Android SDK licence on your behalf**; delete that folder to remove them.
+The app targets Android 16 (API 36), package `com.promaninfi.fieldwise`, and opens on `https://fieldwise.promaninfi.com` (change in `frontend/js/config.js`).
+Creating the signing key, version bumps, publishing to the server's `/download` page and the in-app update prompt: see [release/README.md](release/README.md). Real-phone test plan: [../deploy/ANDROID_DEVICE_TEST.md](../deploy/ANDROID_DEVICE_TEST.md).
 
 ## Build for iPhone
 Needs a Mac with Xcode, CocoaPods and an Apple developer account.

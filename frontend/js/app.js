@@ -2,7 +2,8 @@ import { LOGO_FULL, LOGO_COMPACT } from "./brand.js";
 import { get, post, session, setAuthLostHandler, queue, fileUrl } from "./api.js";
 import { $, $$, esc, toast, fail, svgIcon, fmtDT, skeleton, modal, debounce } from "./ui.js";
 import * as tracker from "./tracker.js";
-import { isBundled, serverBase, setServer } from "./config.js";
+import { isBundled, serverBase, setServer, DEFAULT_SERVER } from "./config.js";
+import { checkForUpdate } from "./appupdate.js";
 import * as core from "./pages-core.js";
 import * as crm from "./pages-crm.js";
 import * as hr from "./pages-hr.js";
@@ -105,6 +106,7 @@ async function boot() {
     const fix = u => typeof u === "string" && u.startsWith("/api/") ? serverBase() + u : u; const wo = window.open; window.open = (u, ...r) => wo.call(window, fix(u), ...r);
     document.addEventListener("click", e => { const a = e.target.closest?.('a[href^="/api/"]'); if (a) a.href = serverBase() + a.getAttribute("href"); }, true);
   } else { setupPwa(); }
+  if (isBundled()) { checkForUpdate(); document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); }); }
   if (location.hash.startsWith("#/reset")) return resetScreen();
   if (!session.token) return authScreen("login");
   try { const me = await get("/auth/me"); S.user = me.user; S.tenant = me.tenant; shell(); route(); if (me.consent_required) askConsent(me.tracking_policy); }
@@ -148,7 +150,7 @@ function authScreen(mode = "login", msg = "") {
     ${msg ? `<div class="chip bad" style="display:block;margin-bottom:12px;padding:8px 10px;border-radius:8px">${esc(msg)}</div>` : ""}
     ${signup ? `<label class="f"><span>Company name</span><input name="company" required autocomplete="organization"></label><label class="f"><span>Your name</span><input name="name" required autocomplete="name"></label>
       <label class="f"><span>Country</span><select name="country"><option>India</option><option>UAE</option><option>Saudi Arabia</option><option>Qatar</option><option>Oman</option><option>Kuwait</option><option>Bahrain</option></select></label>`
-      : `${isBundled() ? `<label class="f"><span>Company server</span><input name="server" required inputmode="url" autocapitalize="none" placeholder="fieldwise.yourcompany.com" value="${esc(serverBase())}"><span class="hint">Ask your administrator for this address. You only enter it once.</span></label>` : ""}<label class="f"><span>Workspace</span><input name="workspace" required autocomplete="organization" placeholder="e.g. proman" value="${esc(session.workspace)}"><span class="hint">The short name you chose at sign-up.</span></label>`}
+      : `${isBundled() ? `<details class="f" ${serverBase() === DEFAULT_SERVER ? "" : "open"} style="margin-bottom:12px"><summary class="small muted" style="cursor:pointer">Server: ${esc(serverBase().replace(/^https?:\/\//, ""))} &middot; change</summary><label class="f" style="margin-top:8px"><span>Company server</span><input name="server" required inputmode="url" autocapitalize="none" placeholder="fieldwise.yourcompany.com" value="${esc(serverBase())}"><span class="hint">Only change this if your administrator gave you a different address.</span></label></details>` : ""}<label class="f"><span>Workspace</span><input name="workspace" required autocomplete="organization" placeholder="e.g. proman" value="${esc(session.workspace)}"><span class="hint">The short name you chose at sign-up.</span></label>`}
     <label class="f"><span>Email</span><input name="email" type="email" required autocomplete="username"></label>
     <label class="f"><span>Password</span><input name="password" type="password" required minlength="8" autocomplete="${signup ? "new-password" : "current-password"}"></label>
     <button class="btn primary" style="width:100%" id="go">${signup ? "Create workspace" : "Sign in"}</button>

@@ -26,3 +26,7 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "capacitor://localh
 
 PUBLIC_URL = os.getenv("PUBLIC_URL", "")  # https://fieldwise.yourcompany.com : used in emailed links
 PING_RETENTION_DAYS = int(os.getenv("PING_RETENTION_DAYS", "180"))
+
+# Direct-download Android app: publish-apk.sh puts the signed APK and latest.json here (a bind mount in docker-compose).
+RELEASES_DIR = Path(os.getenv("RELEASES_DIR", BASE_DIR.parent / "releases"))
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@promaninfi.com")

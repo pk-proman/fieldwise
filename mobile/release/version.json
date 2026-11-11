@@ -1,0 +1,6 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "minVersionCode": 1,
+  "releaseNotes": "First release of the Fieldwise Android app: background GPS tracking, fingerprint check-in, offline queue."
+}

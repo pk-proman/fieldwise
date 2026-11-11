@@ -24,10 +24,10 @@ echo "Deploying Fieldwise to $TARGET:$DIR  (domain $DOMAIN, local port $PORT)"
 read -r -p "Continue? [y/N] " a; [ "$a" = y ] || exit 1
 
 rssh "command -v docker >/dev/null || (curl -fsSL https://get.docker.com | sh)"
-rssh "mkdir -p $DIR"
+rssh "mkdir -p $DIR/releases"
 run rsync -az --delete \
   --exclude .git --exclude .env --exclude '*.db' --exclude '*.db-shm' --exclude '*.db-wal' --exclude backend/uploads --exclude backend/tests \
-  --exclude __pycache__ --exclude .venv --exclude node_modules --exclude mobile --exclude .DS_Store "$HERE/" "$TARGET:$DIR/"
+  --exclude __pycache__ --exclude .venv --exclude node_modules --exclude mobile --exclude releases --exclude .DS_Store "$HERE/" "$TARGET:$DIR/"
 
 rbash "$DIR" "$PORT" "$DOMAIN" <<'REMOTE'
 set -e; DIR="$1"; PORT="$2"; DOMAIN="$3"; cd "$DIR"

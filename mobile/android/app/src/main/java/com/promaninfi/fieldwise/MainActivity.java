@@ -1,4 +1,4 @@
-package app.fieldwise.mobile;
+package com.promaninfi.fieldwise;
 
 import com.getcapacitor.BridgeActivity;
 

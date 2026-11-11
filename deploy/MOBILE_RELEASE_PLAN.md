@@ -3,16 +3,20 @@
 Why the native app matters: the PWA can only track while it is open. All-day tracking with the screen off needs the Android app (background location service).
 Both phases need the same technical groundwork, so we do it once. Time estimates assume decisions below are made quickly.
 
-## 0. Decisions needed from Proman first
-| Decision | Notes |
+## 0. Decisions (made 2026-11-11)
+| Decision | Answer |
 |---|---|
-| **Package name** | Today it is `app.fieldwise.mobile`. It is **permanent** once on Play. Suggest `com.promaninfi.fieldwise`, or keep a product-neutral one if Fieldwise will be sold to others. |
-| **Publisher identity** | Play developer name shown to users, e.g. "Proman Infrastructure Services Pvt Ltd" (recommended) or the Fieldwise brand. |
-| **Play account type** | **Organization** account (needs a D-U-N-S number for the company, a company website and a company email). Personal accounts must first run a closed test with 12 testers for 14 days. |
-| **Support contact** | A shared mailbox, e.g. support@promaninfi.com (shown on Play and in the app). |
-| **Default server** | Bake `https://fieldwise.promaninfi.com` into the app so staff never type an address. |
+| **Package name** | `com.promaninfi.fieldwise` (permanent once on Play) |
+| **Publisher name** | Prashant Kumar (shown to users on Play) |
+| **Play account type** | Organization account intended; Proman's D-U-N-S number is **applied for, not yet issued**. Verification cannot start until it arrives. |
+| **Support contact** | support@promaninfi.com (create this mailbox before launch; it is on the download page and the Play listing) |
+| **Default server** | `https://fieldwise.promaninfi.com` is built into the app (changeable under "Server" on the sign-in screen) |
+
+Note: the Play listing shows the developer name from the verified account. For an organization account Google shows the legal organization name, so "Prashant Kumar" appears only on a personal account. See Phase 2.
 
 ## Phase 1: direct APK download (target: 1-2 weeks of work + device testing)
+**Status 2026-11-11:** steps 1-3, 5 and 6 are built (signed release APK, target API 36, `/download`, in-app update prompt). Step 4 (real-phone testing, see ANDROID_DEVICE_TEST.md) and step 7 (rollout) remain. How to release: mobile/release/README.md.
+
 1. **Upgrade the Android project** to current Capacitor and Android tooling, and target **Android 16 (API 36)** (the app targets API 34 today). Google requires API 36 for new apps and updates since 31 Aug 2026, so doing it now avoids rework for Play.
 2. **Create the release signing key once.** Keep it offline in two places plus a password manager. Never commit it. Losing it means users cannot update the app in place.
 3. **Build a signed release APK** (not the debug build): version code/name scheme, default server baked in, cleartext traffic off, permissions audited.

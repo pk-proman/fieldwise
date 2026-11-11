@@ -1,5 +1,5 @@
 FROM python:3.13-slim
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 ENV=production AUTO_MIGRATE=0 FRONTEND_DIR=/srv/frontend UPLOAD_DIR=/data/uploads
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 ENV=production AUTO_MIGRATE=0 FRONTEND_DIR=/srv/frontend UPLOAD_DIR=/data/uploads RELEASES_DIR=/data/releases
 RUN useradd --create-home --uid 10001 fieldwise && mkdir -p /data/uploads && chown -R fieldwise /data
 WORKDIR /srv/backend
 COPY backend/requirements.txt .

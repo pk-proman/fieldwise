@@ -22,3 +22,8 @@ mobile/ios/App/Pods/
 
 # data pulled from the live ERPNext (company data / personal data) - never commit
 backend/seed/
+
+# signed Android builds are published to the server by mobile/release/publish-apk.sh, not through git
+releases/
+mobile/release/keystore.properties
+*.jks
