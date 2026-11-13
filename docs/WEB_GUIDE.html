@@ -1,0 +1,321 @@
+<meta charset="utf-8">
+<title>Fieldwise Web Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow reading column. Each feature = title + plain sentence + numbered phone-screen strip + optional flow chart. Teal is Fieldwise's brand; amber marks "tap here". */
+:root{--bg:#f4f7f6;--surface:#ffffff;--ink:#10201e;--mut:#556764;--line:#d9e3e0;--brand:#0f766e;--brand-ink:#ffffff;--brand-soft:#dff3ef;--amber:#d97706;--amber-soft:#fdf1da;--ok:#15803d;--ok-soft:#dcf3e3;--bad:#b42318;--bad-soft:#fbe4e1;--screen:#eef3f2;--display:"Bricolage Grotesque",Georgia,serif;--body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1413;--surface:#121e1c;--ink:#e6f0ee;--mut:#9ab0ac;--line:#243836;--brand:#2dd4bf;--brand-ink:#04201c;--brand-soft:#12312d;--amber:#f5a524;--amber-soft:#35290e;--ok:#4ade80;--ok-soft:#12301d;--bad:#f87171;--bad-soft:#3a1714;--screen:#0e1917;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b1413;--surface:#121e1c;--ink:#e6f0ee;--mut:#9ab0ac;--line:#243836;--brand:#2dd4bf;--brand-ink:#04201c;--brand-soft:#12312d;--amber:#f5a524;--amber-soft:#35290e;--ok:#4ade80;--ok-soft:#12301d;--bad:#f87171;--bad-soft:#3a1714;--screen:#0e1917;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin:0 auto;padding-block:20px 64px}
+h1,h2,h3{font-family:var(--display);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(1.9rem,5vw,2.6rem)}h2{font-size:1.55rem}h3{font-size:1.15rem}
+p{margin:.4em 0}.mut{color:var(--mut)}.small{font-size:.86rem}
+a{color:var(--brand)}
+nav.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:8px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+nav.top a{padding:7px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none;font-weight:600;font-size:.9rem}
+nav.top a:focus-visible,a:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+header.hero{padding:28px 0 8px;display:grid;gap:10px}
+.who{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:99px;font-size:.78rem;font-weight:700;background:var(--brand-soft);color:var(--brand)}
+.chip.mgr{background:var(--amber-soft);color:var(--amber)}.chip.adm{background:var(--bad-soft);color:var(--bad)}.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.part{margin-top:44px}.part>h2{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:3px solid var(--brand)}
+.part>.lead{margin:10px 0 0}
+.feat{margin-top:22px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:12px;min-width:0}
+.feat header{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.feat header h3{flex:1;min-width:180px}
+.steps{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start;scroll-snap-type:x proximity}
+.step{flex:0 0 150px;scroll-snap-align:start;display:grid;gap:8px;justify-items:center;text-align:center}
+.step .cap{font-size:.84rem;line-height:1.35;font-weight:500}
+.step .no{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:.78rem;margin-right:5px}
+.ph{width:150px;border:2px solid var(--ink);border-radius:20px;background:var(--screen);overflow:hidden;display:grid;grid-template-rows:auto 1fr;text-align:left;min-height:178px}
+.ph .bar{background:var(--brand);color:var(--brand-ink);font-size:.7rem;font-weight:700;padding:7px 10px}
+.ph .body{padding:8px;display:grid;gap:5px;align-content:start}
+.ph .t{font-size:.66rem;color:var(--mut);line-height:1.3}.ph .s{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin-top:3px}
+.ph .b{background:var(--brand);color:var(--brand-ink);border-radius:7px;font-size:.7rem;font-weight:700;padding:6px;text-align:center}
+.ph .b.alt{background:var(--surface);color:var(--ink);border:1px solid var(--line)}.ph .b.red{background:var(--bad);color:#fff}
+.ph .t,.ph .i,.ph .l{overflow-wrap:anywhere}
+.ph .i{background:var(--surface);border:1px solid var(--line);border-radius:6px;font-size:.66rem;padding:5px 6px;color:var(--mut)}
+.ph .l{background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-size:.68rem;font-weight:600;line-height:1.25}
+.ph .l small{display:block;font-weight:400;color:var(--mut);font-size:.6rem}
+.ph .c{justify-self:start;border-radius:99px;padding:2px 8px;font-size:.62rem;font-weight:700;background:var(--ok-soft);color:var(--ok)}
+.ph .c.w{background:var(--amber-soft);color:var(--amber)}.ph .c.r{background:var(--bad-soft);color:var(--bad)}
+.ph .m{height:58px;border-radius:7px;background:linear-gradient(135deg,var(--brand-soft),var(--screen));border:1px solid var(--line);position:relative}
+.ph .m:after{content:"";position:absolute;left:30%;top:38%;width:44%;height:2px;background:var(--brand);transform:rotate(-22deg);box-shadow:0 0 0 1px var(--brand-soft)}
+.ph .hl{outline:3px solid var(--amber);outline-offset:1px;border-radius:7px}
+.flow{display:flex;flex-wrap:wrap;gap:6px 0;align-items:stretch;background:var(--screen);border:1px dashed var(--line);border-radius:12px;padding:12px}
+.flow .n{background:var(--surface);border:1.5px solid var(--brand);border-radius:10px;padding:8px 11px;font-size:.84rem;font-weight:600;display:grid;align-content:center;text-align:center;min-width:92px;max-width:190px}
+.flow .n small{display:block;font-weight:400;color:var(--mut);font-size:.74rem}
+.flow .q{background:var(--amber-soft);border-color:var(--amber);border-style:dashed}
+.flow .end{background:var(--ok-soft);border-color:var(--ok)}.flow .no{background:var(--bad-soft);border-color:var(--bad)}
+.flow .a{align-self:center;padding:0 7px;color:var(--mut);font-weight:700}
+.flow .a.v{display:none}
+.flow .alt{flex-basis:100%;font-size:.8rem;color:var(--mut);padding:4px 2px 0}
+.flowt{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin-bottom:-4px}
+.tip{background:var(--amber-soft);border-radius:10px;padding:9px 12px;font-size:.88rem}
+.tip b{color:var(--amber)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.faq{display:grid;gap:8px;margin-top:14px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+summary{cursor:pointer;font-weight:600}
+@media (max-width:560px){.flow{flex-direction:column;align-items:stretch}.flow .n{max-width:none}.flow .a{display:none}.flow .a.v{display:block;text-align:center;padding:0}}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+
+/* ---- web guide additions: browser-window mock-ups, role table, vendor chip */
+.chip.sup{background:var(--ok-soft);color:var(--ok)}
+.step.web{flex:0 0 330px}
+.wbw{width:330px;border:2px solid var(--ink);border-radius:10px;background:var(--screen);overflow:hidden;text-align:left;min-height:200px}
+.wbw .tt{display:flex;align-items:center;gap:5px;background:var(--ink);color:var(--bg);padding:5px 9px}
+.wbw .tt i{width:7px;height:7px;border-radius:50%;background:var(--bg);opacity:.55}
+.wbw .tt em{font-style:normal;font-size:.64rem;font-weight:700;margin-left:6px;opacity:.95}
+.wbw .cols{display:grid;grid-template-columns:70px 1fr;min-height:170px}
+.wbw .sd{background:var(--surface);border-right:1px solid var(--line);padding:7px 5px;display:grid;gap:3px;align-content:start}
+.wbw .sd span{font-size:.55rem;padding:3px 5px;border-radius:5px;color:var(--mut);font-weight:600}
+.wbw .sd span.on{background:var(--brand-soft);color:var(--brand)}
+.wbw .main{padding:8px;display:grid;gap:5px;align-content:start;min-width:0}
+.wbw .h{font-family:var(--display);font-weight:700;font-size:.8rem}
+.wbw .t{font-size:.62rem;color:var(--mut);line-height:1.3;overflow-wrap:anywhere}
+.wbw .b{background:var(--brand);color:var(--brand-ink);border-radius:6px;font-size:.62rem;font-weight:700;padding:5px 8px;justify-self:start}
+.wbw .b.alt{background:var(--surface);color:var(--ink);border:1px solid var(--line)}.wbw .b.red{background:var(--bad);color:#fff}
+.wbw .i{background:var(--surface);border:1px solid var(--line);border-radius:5px;font-size:.6rem;padding:4px 6px;color:var(--mut);overflow-wrap:anywhere}
+.wbw .kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(62px,1fr));gap:5px}
+.wbw .k{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 6px;display:grid}
+.wbw .k b{font-size:.78rem}.wbw .k span{font-size:.52rem;color:var(--mut)}
+.wbw .g{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:.58rem;font-weight:500}
+.wbw .g.gh{background:transparent;border:0;font-weight:700;color:var(--mut);text-transform:uppercase;font-size:.5rem;letter-spacing:.05em;padding-block:0}
+.wbw .g span{overflow-wrap:anywhere;min-width:0}
+.wbw .c{justify-self:start;border-radius:99px;padding:2px 8px;font-size:.58rem;font-weight:700;background:var(--ok-soft);color:var(--ok)}
+.wbw .c.w{background:var(--amber-soft);color:var(--amber)}.wbw .c.r{background:var(--bad-soft);color:var(--bad)}
+.wbw .mp{height:64px;border-radius:6px;background:linear-gradient(135deg,var(--brand-soft),var(--screen));border:1px solid var(--line);position:relative}
+.wbw .mp:after{content:"";position:absolute;left:25%;top:40%;width:50%;height:2px;background:var(--brand);transform:rotate(-20deg)}
+.wbw .u{height:7px;border-radius:99px;background:var(--line);overflow:hidden}.wbw .u i{display:block;height:100%;background:var(--brand)}
+.wbw .tb{display:flex;gap:3px;flex-wrap:wrap}.wbw .tb span{font-size:.58rem;padding:3px 7px;border-radius:5px;border:1px solid var(--line);background:var(--surface);font-weight:600}
+.wbw .tb span.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.wbw .hl{outline:3px solid var(--amber);outline-offset:1px;border-radius:6px}
+.tablewrap{overflow-x:auto}
+table.rt{border-collapse:collapse;width:100%;font-size:.88rem;min-width:520px}
+table.rt th,table.rt td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+table.rt th{color:var(--mut);font-size:.76rem;text-transform:uppercase;letter-spacing:.05em}
+code{background:var(--brand-soft);color:var(--brand);padding:1px 6px;border-radius:5px;font-size:.88em}
+@media (max-width:560px){.step.web{flex-basis:300px}.wbw{width:300px}}
+</style>
+<div class="wrap">
+<header class="hero">
+  <span class="mut small" style="font-weight:700;letter-spacing:.08em;text-transform:uppercase">Fieldwise · Web app</span>
+  <h1>Fieldwise on the web: how to use it</h1>
+  <p class="mut" style="max-width:60ch">The complete guide to the browser version, for admins, managers and employees. Open your company's Fieldwise address on a computer (or any browser), sign in, and use the menu on the left. Each feature shows what it is for, the steps, and a flow chart where it helps.</p>
+  <div class="who"><span class="chip">Everyone</span><span class="chip mgr">Manager and above</span><span class="chip adm">Admin only</span><span class="chip sup">Vendor super-admin</span></div>
+  <div class="card" style="margin-top:8px"><h3 style="margin-bottom:8px">Who sees what</h3>
+    <div class="tablewrap"><table class="rt"><thead><tr><th></th><th>Employee</th><th>Manager</th><th>Admin / Owner</th></tr></thead><tbody>
+      <tr><td><b>Sees data of</b></td><td>Themselves</td><td>Themselves + everyone who reports to them, all the way down</td><td>Everyone in the company</td></tr>
+      <tr><td><b>Approves</b></td><td>Nothing</td><td>Leave, expenses, discounts of their team</td><td>Everything, and sets the approval levels</td></tr>
+      <tr><td><b>Menu</b></td><td>Work screens</td><td>+ Live team, Reports, team views</td><td>+ Settings, Setup guide, Recycle bin</td></tr>
+      <tr><td><b>Main place to work</b></td><td>The phone app</td><td>Web</td><td>Web</td></tr>
+    </tbody></table></div>
+    <p class="small mut" style="margin-top:8px">The <b>Owner</b> is the company's main administrator. Roles are set in Settings, Users &amp; hierarchy. What you do not have access to simply does not appear in your menu.</p></div>
+</header>
+<nav class="top" aria-label="Sections"><a href="#basics">Getting around</a><a href="#field">Field force</a><a href="#sales">Sales &amp; CRM</a><a href="#ops">Purchase &amp; support</a><a href="#admin">Admin</a><a href="#vendor">Vendor</a><a href="#help">Help</a></nav>
+<main id="app"></main>
+</div>
+<script>
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* Browser-window mock-up. Row syntax: "h:Heading", "b:Button", "a:Outline button", "r:Red button", "t:Text", "i:Input", "k:Label=Value" (stat tile; consecutive ones sit side by side),
+   "g:cell|cell|cell" table row (first "G:" = header row), "c:" green chip, "w:" amber chip, "x:" red chip, "m" map, "u:" progress bar (percent), "d:" tabs "A|B|C" (first is active). Prefix "*" circles what to click. */
+const SIDE = ["Dashboard", "Attendance", "Leads", "Tasks", "Expenses", "Reports", "Settings"];
+function wb(title, rows, active) {
+  let kp = [], out = [];
+  const flush = () => { if (kp.length) { out.push(`<div class="kp">${kp.join("")}</div>`); kp = []; } };
+  rows.forEach(r => {
+    const hl = r[0] === "*"; if (hl) r = r.slice(1);
+    const [k, ...v] = r.split(":"); const val = esc(v.join(":")); const cls = hl ? " hl" : "";
+    if (k === "k") { const [l, n] = val.split("="); kp.push(`<div class="k${cls}"><b>${n}</b><span>${l}</span></div>`); return; }
+    flush();
+    switch (k) {
+      case "h": out.push(`<div class="h">${val}</div>`); break;
+      case "b": out.push(`<div class="b${cls}">${val}</div>`); break; case "a": out.push(`<div class="b alt${cls}">${val}</div>`); break; case "r": out.push(`<div class="b red${cls}">${val}</div>`); break;
+      case "t": out.push(`<div class="t${cls}">${val}</div>`); break; case "i": out.push(`<div class="i${cls}">${val}</div>`); break;
+      case "g": case "G": out.push(`<div class="g${k === "G" ? " gh" : ""}${cls}">${val.split("|").map(c => `<span>${c}</span>`).join("")}</div>`); break;
+      case "c": out.push(`<div class="c${cls}">${val}</div>`); break; case "w": out.push(`<div class="c w${cls}">${val}</div>`); break; case "x": out.push(`<div class="c r${cls}">${val}</div>`); break;
+      case "m": out.push(`<div class="mp${cls}"></div>`); break;
+      case "u": out.push(`<div class="u${cls}"><i style="width:${+val || 50}%"></i></div>`); break;
+      case "d": out.push(`<div class="tb${cls}">${val.split("|").map((c, i) => `<span class="${i ? "" : "on"}">${c}</span>`).join("")}</div>`); break;
+    }
+  });
+  flush();
+  return `<div class="wbw" role="img" aria-label="Web screen: ${esc(title)}"><div class="tt"><i></i><i></i><i></i><em>${esc(title)}</em></div><div class="cols"><div class="sd">${SIDE.map(s => `<span class="${s === active ? "on" : ""}">${s}</span>`).join("")}</div><div class="main">${out.join("")}</div></div></div>`;
+}
+function flow(title, items, alt) {
+  const nodes = items.map(s => {
+    let c = "n"; if (s[0] === "?") { c += " q"; s = s.slice(1); } else if (s[0] === "+") { c += " end"; s = s.slice(1); } else if (s[0] === "-") { c += " no"; s = s.slice(1); }
+    const [a, b] = s.split("|"); return `<div class="${c}">${esc(a)}${b ? `<small>${esc(b)}</small>` : ""}</div>`;
+  }).join(`<span class="a" aria-hidden="true">→</span><span class="a v" aria-hidden="true">↓</span>`);
+  return `<div class="flowt">${esc(title)}</div><div class="flow">${nodes}${alt ? `<div class="alt">${alt}</div>` : ""}</div>`;
+}
+const who = { all: '<span class="chip">Everyone</span>', mgr: '<span class="chip mgr">Manager and above</span>', adm: '<span class="chip adm">Admin only</span>', sup: '<span class="chip sup">Vendor super-admin</span>' };
+function feat(f) {
+  return `<section class="feat" id="${f.id}"><header><h3>${esc(f.title)}</h3>${(f.who || ["all"]).map(w => who[w]).join("")}</header>
+    <p style="margin:0">${f.what}</p>
+    ${f.steps?.length ? `<div class="steps" tabindex="0" aria-label="Steps for ${esc(f.title)}">${f.steps.map((s, i) => `<div class="step web">${wb(s.t, s.rows, s.nav)}<div class="cap"><span class="no">${i + 1}</span>${s.cap}</div></div>`).join("")}</div>` : ""}
+    ${f.flow ? flow(f.flow[0], f.flow[1], f.flow[2]) : ""}${f.tip ? `<div class="tip"><b>Tip.</b> ${f.tip}</div>` : ""}</section>`;
+}
+
+/* ---------------------------------------------------------------- content */
+const BASICS = [
+  { id: "w-signin", title: "Sign in and find your way around", what: "Open your company's Fieldwise web address. Sign in with the <b>company code</b> (workspace), your email and your password. The menu on the left is grouped: Sales, Field work, People, Purchase &amp; support, Admin. On a phone-sized window it becomes a bottom bar with <b>More</b>.",
+    steps: [
+      { t: "Sign in", rows: ["i:Workspace (company code)", "i:Email", "i:Password", "*b:Sign in", "t:Forgot your password?"], cap: "Company code, email, password. Use <b>Forgot your password?</b> for an emailed reset link" },
+      { t: "Dashboard", rows: ["h:Good morning, Asha", "k:Present=12 / 15", "k:In field=9", "k:Visits=21", "t:Search, bell and your name are at the top"], nav: "Dashboard", cap: "You land on the <b>Dashboard</b>. Menu on the left, search and bell on top" },
+      { t: "Your menu", rows: ["*a:Asha ▾", "a:Toggle dark / light", "a:Turn on authenticator (MFA)", "r:Sign out"], cap: "Click your <b>name</b> (top right) for dark mode, the authenticator and sign-out" },
+    ],
+    flow: ["Signing in", ["Open the company address", "Enter code, email, password", "?Authenticator on?", "Enter the 6-digit code", "+Dashboard"], "Signing in on a new device signs you out of the old one. After too many wrong tries the sign-in locks for 15 minutes."],
+    tip: "Press the <b>search box</b> at the top and type 2 letters or more: it finds leads, customers, contacts, quotations and orders, including by mobile number or email." },
+  { id: "w-notify", title: "Notifications and announcements", what: "The <b>bell</b> shows what needs you: approvals waiting, a lead assigned to you, an alert about a silent phone. Click it to read, and <b>Mark all read</b>. Company notices appear on the Dashboard and under Announcements.",
+    steps: [{ t: "Notifications", rows: ["h:Notifications", "g:Expense to approve|Asha: INR 252 (fuel)", "g:Lead assigned|Mehta Infra", "*a:Mark all read"], cap: "Click the <b>bell</b>. Unread items are highlighted" }] },
+  { id: "w-dash", title: "Dashboard", what: "Your day at a glance. Employees see their own numbers; managers see the whole team and can pick one person's team from the list; admins see everyone.", who: ["all", "mgr"],
+    steps: [
+      { t: "Dashboard", rows: ["h:Good morning, Ravi · your team", "k:Present=12 / 15", "k:In field=9 · 214 km", "k:Visits=21", "k:Overdue tasks=3", "u:70"], nav: "Dashboard", cap: "Tiles: present, in the field, visits, overdue tasks" },
+      { t: "Dashboard", rows: ["d:Whole team|Asha's team|Meena's team", "t:Attendance, last 7 days", "u:80", "t:Sales pipeline: New, Contacted, Qualified, Proposal, Won, Lost", "u:45"], nav: "Dashboard", cap: "Managers: choose <b>Whole team</b> or one person's team. Charts follow" },
+    ],
+    tip: "Click a person in Live team or Route history for detail. Charts here are summaries; Reports &amp; forecast has the sales numbers." },
+];
+
+const FIELD = [
+  { id: "w-att", title: "Attendance", what: "Check in and out from the web (the phone app is the normal way), and see your history with times, distance and flags. Everyone sees their own history; <b>Export CSV</b> downloads it.",
+    steps: [{ t: "Attendance", rows: ["h:Attendance", "w:You haven't marked attendance yet", "*b:Check in", "m", "G:Date|In|Out|Distance|Status", "g:10 Nov|9:41|18:35|42 km|present"], nav: "Attendance", cap: "<b>Check in</b> uses your computer's location. History and <b>Export CSV</b> below" }],
+    flow: ["Day", ["Check in|location + optional face", "?Inside an office or customer zone?", "+Present or late", "-Flagged|manager can approve with a reason"], "Your admin decides whether check-in must be at an office, whether face scan is required and how fake-GPS is handled."] },
+  { id: "w-live", title: "Live team", what: "A map of everyone on duty right now, with the route each person has travelled since check-in. Click a person for details. <b>Phone health</b> lists whose phone settings could stop tracking, and why a person has gone quiet.", who: ["mgr"],
+    steps: [
+      { t: "Live team", rows: ["h:Live team", "m", "g:Asha K.|live|74%", "g:Ravi S.|GPS off|—", "*a:Phone health"], cap: "Green is live, amber idle, grey offline. Open <b>Phone health</b>" },
+      { t: "Phone health", rows: ["x:Ravi S.: battery restricted", "w:Meena: location while using", "c:Asha: all good"], cap: "Each person shows what to fix and the likely reason" },
+    ],
+    tip: "You only see people who report to you (all the way down). Admins see everyone." },
+  { id: "w-hist", title: "Route history", what: "A month of how far each person travelled, drilled down the reporting chain. By default you see your direct reports; click <b>Open team ›</b> on anyone with their own team to go one level down, <b>Days</b> for the day list, and a day for the map.", who: ["mgr"],
+    steps: [
+      { t: "Route history", rows: ["d:This month|Last month|Pick a month", "t:Dev (me) › Ravi S.", "G:Person|Days|Tracked km|Quality", "g:Ravi S. · team of 6|22|412|88%", "*a:Open team ›"], cap: "Pick the month. <b>Open team ›</b> goes down a level; the trail on top takes you back" },
+      { t: "Ravi S.: days", rows: ["G:Date|Km|Stops|Quality", "*g:3 Nov|42|3|92%", "g:4 Nov|38|2|90%"], cap: "<b>Days</b> shows each day. Click a day" },
+      { t: "Day map", rows: ["m", "t:42 km tracked · 3 stops · quality 92%"], cap: "Route on the map: green start, red end, amber stops" },
+    ],
+    flow: ["Reading the numbers", ["Tracked km|trusted GPS, counted", "Estimated km|phone silent, shown not counted", "Quality %|how much of the day was recorded", "+Use all three before approving a big claim"], "<b>Export CSV</b> gives one row per person per day for everyone under the person you are viewing. Raw GPS points are kept for the retention period your admin sets; these summaries are kept about 13 months."] },
+  { id: "w-hours", title: "Work hours and productivity", what: "<b>Day view</b> shows hours worked and distance per person per day. Managers also get <b>Productivity</b>, <b>Alerts &amp; anomalies</b> (for example mock GPS, long GPS-off periods) and <b>Arrivals &amp; departures</b> at offices and customer sites.", who: ["all", "mgr"],
+    steps: [{ t: "Work hours", rows: ["h:Work hours & productivity", "d:Day view|Productivity|Alerts & anomalies|Arrivals & departures", "G:Person|In|Out|Hours|Km", "g:Asha K.|9:41|18:35|8.9|42"], cap: "Tabs along the top. Managers see all four" }] },
+  { id: "w-tasks", title: "Tasks and meetings", what: "<b>Tasks</b> are to-dos you or your manager create; assign them, set a due date and move them to Done. Managers can <b>Bulk upload</b> tasks from a CSV. <b>Customer meetings</b> are scheduled with a reminder.",
+    steps: [{ t: "Tasks", rows: ["h:Tasks", "b:+ New task", "a:Bulk upload", "G:Task|Assignee|Due|Status", "g:Call Mr Rao|Asha|Today|Open", "g:Send quote|Ravi|Tomorrow|In progress"], nav: "Tasks", cap: "<b>+ New task</b> or <b>Bulk upload</b>. Change status in the row" }],
+    flow: ["Task life", ["Open", "In progress", "+Done", "-Overdue|reminder, and the manager is told"]] },
+  { id: "w-beat", title: "Beat plans", what: "A beat is a planned list of customers to visit. Managers create beats for a person and day (or repeat them), the system can order the stops into the shortest route, and the manager sees who kept to plan. <b>Routes</b> shows planned versus travelled.", who: ["all", "mgr"],
+    steps: [{ t: "Beat plan", rows: ["h:Beat plan", "b:+ New beat", "G:Beat|Person|Stops|Done", "g:Pune North|Asha|8|6", "g:Pune East|Ravi|6|6"], cap: "<b>+ New beat</b>: name, person, date, stops from your customers" }],
+    flow: ["Beat day", ["Manager creates the beat", "Person sees today's stops", "Visits are recorded at each stop", "+Coverage shows to the manager", "-Missed stops are marked"]] },
+  { id: "w-visits", title: "Customer visits", what: "The record of each customer visit: who, where, when, the OTP check, photos and the minutes of meeting. Managers see their team's visits; admins everyone's.",
+    steps: [{ t: "Customer visits", rows: ["h:Customer visits", "G:Date|Person|Customer|Time|OTP", "g:10 Nov|Asha|ABC Constructions|42 min|✓", "*g:10 Nov|Ravi|Sharma Traders|35 min|✓"], cap: "Click a visit to read the MOM and see the photos" }] },
+  { id: "w-leave", title: "Leaves and holidays", what: "Apply for leave and see your balance. Managers approve or reject requests from their team, with a reason. Admins set leave types, yearly days and holidays.", who: ["all", "mgr"],
+    steps: [{ t: "Leaves", rows: ["h:Leaves", "t:Casual 8 days · Sick 5 · Earned 12", "b:+ Apply for leave", "G:Person|Dates|Type|Status", "g:Asha|12-13 Nov|Casual|Pending", "*b:Approve"], cap: "Managers see <b>Approve / Reject</b> on pending requests" }],
+    flow: ["Leave", ["Apply", "?Manager decision", "+Approved|balance reduced", "-Rejected|reason shown"]] },
+  { id: "w-exp", title: "Expenses", what: "Create claims with a bill photo (the amount is read from the photo for you to check), see <b>My claims</b>, and managers see <b>Team claims</b> with bulk <b>Approve selected / Reject selected</b>. If automatic expenses are on, the day's travel claim appears with an <b>Auto</b> label, and a bar at the top shows what today's route earns.",
+    steps: [
+      { t: "Expenses", rows: ["h:Expenses", "d:My claims|Team claims", "c:Today's route: 42 km · rules give 252", "G:Date|Category|Amount|Status", "g:10 Nov|Fuel · Auto|252|Pending"], nav: "Expenses", cap: "<b>My claims</b> and <b>Team claims</b> tabs" },
+      { t: "Team claims", rows: ["G:Person|Category|Amount|", "g:Asha|Fuel · Auto|252|☑", "*b:Approve selected", "a:Reject selected"], nav: "Expenses", cap: "Tick claims, then <b>Approve selected</b>. Rejecting asks for a reason" },
+    ],
+    flow: ["Claim", ["Created|by hand or automatically", "?Needs more than one approval level?", "Manager approves", "+Approved, then Paid", "-Rejected|with reason"], "Big claims can need several approval levels (admin sets the limits in Settings, Allowance &amp; approvals). A hand-made fuel claim is blocked on a day that already has an automatic one."] },
+  { id: "w-roster", title: "Shift roster and announcements", what: "<b>Roster</b> assigns shifts and weekly offs to people. <b>Announcements</b> are notices managers post; employees read them on the Dashboard.", who: ["all", "mgr"],
+    steps: [{ t: "Shift roster", rows: ["h:Shift roster", "G:Person|Mon|Tue|Wed", "g:Asha|General|General|Off", "g:Ravi|Early|Early|Early"], cap: "Pick a person and day, choose a shift" }] },
+];
+
+const SALES = [
+  { id: "w-leads", title: "Leads", what: "Every possible customer. See leads as a <b>Table</b> or a <b>Board</b> (drag a card to the next stage). <b>Filters</b> narrow by status, temperature, source, owner, country and dates; <b>Bulk upload</b> loads a CSV; <b>Export</b> downloads what you see; <b>+ Add lead</b> opens a short form. New leads are checked by the AI and scored with reasons.",
+    steps: [
+      { t: "Leads", rows: ["h:Leads", "d:Table|Board", "a:Filters", "a:Bulk upload", "a:Export", "*b:+ Add lead", "G:Lead|Stage|Owner|AI", "g:Mehta Infra|New|Asha|78", "g:Kiran Steel|Contacted|Ravi|64"], nav: "Leads", cap: "Switch <b>Table / Board</b>, use <b>Filters</b>, <b>Bulk upload</b>, <b>Export</b>" },
+      { t: "Mehta Infra", rows: ["c:AI: Qualified 78/100", "t:Real phone, product match, clear quantity", "d:Timeline|Quotations|Visits|Notes", "*a:Assign…", "b:+ Quotation"], nav: "Leads", cap: "Open a lead: AI reasons, timeline, quotations, visits. <b>Assign…</b> changes the owner" },
+    ],
+    flow: ["Lead life", ["New", "Contacted", "Visited", "Qualified", "Quoted", "Negotiation", "+Won", "-Lost|reason recorded"], "Stages, lost reasons and sources are set by your admin. Every change is saved in the lead's timeline. Repeat enquiries from the same phone or email are merged into the existing lead."],
+    tip: "The AI is a helper: at 45 or more it marks a lead Qualified, below that Rejected with the reason. You can overrule it by changing the stage. Admins can change the pass mark." },
+  { id: "w-follow", title: "Follow-ups", what: "Reminders to call, visit or email a lead or customer. Overdue ones turn red and your manager can see them. Managers pick a person to see theirs.", who: ["all", "mgr"],
+    steps: [{ t: "Follow-ups", rows: ["h:Follow-ups", "b:+ Follow-up", "G:When|Who|Action|", "g:Today 11:00|Mehta Infra|Call|☐", "x:Overdue: 2"], cap: "<b>+ Follow-up</b>, then tick it off when done" }] },
+  { id: "w-cust", title: "Customers, contacts and notes", what: "<b>Customers</b> are companies, <b>Contacts</b> are people, <b>Notes</b> are what you recorded. Open a customer to see everything in one place: contacts, visits, calls, quotations, orders, invoices. Customers sync with ERPNext when that is switched on.",
+    steps: [{ t: "ABC Constructions", rows: ["h:ABC Constructions", "d:Overview|Contacts|Visits|Quotations|Orders|Invoices", "g:Mr Rao|98xxxxxx|Purchase head", "*a:Edit"], nav: "Leads", cap: "Tabs inside a customer" }] },
+  { id: "w-money", title: "Quotation, order, invoice, collection", what: "From a ready lead: create a <b>Quotation</b> (PDF, with your terms and numbering; big discounts need approval), turn the win into a <b>Sales order</b>, raise an <b>Invoice</b>, and record each payment in <b>Collections</b>, which also shows what is outstanding.",
+    steps: [
+      { t: "Quotations", rows: ["h:Mehta Infra", "g:Q-0041|₹1,85,000|Sent", "*b:+ Quotation", "a:Download PDF"], nav: "Leads", cap: "On the lead, create the quotation; send or download the PDF" },
+      { t: "Collections", rows: ["h:Collections", "G:Invoice|Due|Customer", "g:INV-0090|₹60,000|Mehta Infra", "*b:+ Collect payment"], cap: "Record each payment. Part-payments and TDS are handled" },
+    ],
+    flow: ["Money flow", ["Quotation", "?Discount over the limit?", "Approver signs off", "Sales order", "Invoice", "Payment collected", "+Fully paid"], "Invoices and payments can sync to ERPNext."] },
+  { id: "w-calls", title: "Call logs, Auto dialer and Re-orders", what: "<b>Call logs</b> records calls (with unknown numbers to link to leads). <b>Auto dialer</b> gives a list to call one after another, noting the result each time. <b>Renewals</b> reminds about contracts and re-orders. <b>Trade fairs</b> groups leads collected at an event.",
+    steps: [{ t: "Auto dialer", rows: ["h:Auto dialer", "t:Campaign: old quotations", "g:Kiran Steel|98xxxxxx", "*b:Call", "a:Interested|Call back|Not interested"], cap: "Call, pick the result, the next contact loads" }],
+    flow: ["Dialer loop", ["Next contact", "Call", "Choose result", "+Lead or follow-up updated automatically"]] },
+  { id: "w-products", title: "Products", what: "Your catalogue: code, name, group, unit, price, tax and photos. Used on leads and quotations. Items sync from ERPNext when it is connected.", steps: [{ t: "Products", rows: ["h:Products", "i:Search…", "G:Item|Group|Price", "g:Hydraulic Jack 5T|Lifting|₹18,500"], cap: "Search the catalogue, open an item to see details" }] },
+  { id: "w-reports", title: "Reports and forecast", what: "Four tabs: <b>Sales forecast</b> (open pipeline, weighted forecast, commit, won this month), <b>Funnel &amp; win rate</b>, <b>Daily call report</b> and <b>Targets</b> (set and compare targets). Managers see their team; admins everyone.", who: ["mgr"],
+    steps: [{ t: "Reports & forecast", rows: ["h:Reports & forecast", "d:Sales forecast|Funnel & win rate|Daily call report|Targets", "k:Open pipeline=₹48 L", "k:Weighted=₹21 L", "k:Commit=₹9 L", "k:Won this month=₹6 L"], nav: "Reports", cap: "Pick a tab. Numbers follow the people under you" }] },
+  { id: "w-inc", title: "Incentives", what: "<b>Report</b> shows what each person earned for a month from the incentive plans. Managers also see <b>Plans</b>: the metric, slabs and who it applies to.", who: ["all", "mgr"],
+    steps: [{ t: "Incentives", rows: ["h:Incentives", "d:Report|Plans", "G:Person|Achieved|Target|Earned", "g:Asha|₹8.2 L|₹7 L|₹12,000"], cap: "Choose the month; managers can open <b>Plans</b>" }] },
+];
+
+const OPS = [
+  { id: "w-vendor", title: "Vendors, purchase orders and dealers", what: "<b>Vendors</b> are your suppliers, <b>Purchase orders</b> raise orders to them and track receipt, <b>Dealers</b> are your channel partners. Managers and above.", who: ["mgr"],
+    steps: [{ t: "Vendor purchase orders", rows: ["h:Vendor purchase orders", "b:+ New PO", "G:PO|Vendor|Amount|Status", "g:PO-0021|Apex Tools|₹92,000|Sent"], cap: "Create a PO from a vendor and your products" }] },
+  { id: "w-help", title: "Helpdesk", what: "Raise a ticket for anything that needs help (customer issue, internal request). Admins see who raised what and answer.",
+    steps: [{ t: "Helpdesk", rows: ["h:Helpdesk", "*b:+ Raise a ticket", "G:Ticket|Type|Subject|Status", "g:T-0012|Complaint|Wrong item|Open"], cap: "<b>+ Raise a ticket</b>, choose the type, describe it" }] },
+];
+
+const ADM = [
+  { id: "w-setup", title: "First-time setup", what: "Until the company's administrator finishes the <b>Setup guide</b>, nobody else can sign in. It covers company profile, which modules to use, work rules and offices, with optional steps for people, catalogue and integrations.", who: ["adm"],
+    steps: [{ t: "Set up your workspace", rows: ["h:Set up your workspace", "u:60", "c:✓ Company profile", "c:✓ Modules", "c:✓ Work rules", "w:Offices", "*b:Finish setup"], cap: "Complete the required steps, then <b>Finish setup</b>" }],
+    flow: ["Setup", ["Company profile", "Modules", "Work rules", "Offices", "+Finish setup|team can sign in"], "Modules you switch off disappear from everyone's menu."] },
+  { id: "w-users", title: "Users and who reports to whom", what: "<b>Settings, Users &amp; hierarchy</b> lists everyone. <b>+ Add user</b> or open a person to edit. The <b>Reports to</b> field builds the hierarchy that decides who sees whose data everywhere. Other fields: role, office, department, designation, shift, employee code, territory, vehicle.", who: ["adm"],
+    steps: [
+      { t: "Users & hierarchy", rows: ["d:Users & hierarchy|Departments|Expense rules", "a:Export", "a:Import", "*b:+ Add user", "G:Name|Role|Reports to|App phone", "g:Asha K.|Employee|Ravi S.|Pixel 8"], nav: "Settings", cap: "The people list, with each person's <b>app phone</b>" },
+      { t: "Edit Asha K.", rows: ["i:Role: Employee", "*i:Reports to: Ravi S.", "i:Designation: Sales Exec", "i:Vehicle: Two-wheeler", "b:Save"], nav: "Settings", cap: "Set <b>Reports to</b>, role and the rest" },
+    ],
+    flow: ["Hierarchy rules", ["Pick a manager", "?Loop, or manager disabled?", "-Refused with a clear message", "+Saved", "Disable a manager|reports move up one level"], "Roles: Employee, Manager, Admin; the Owner is the main administrator and cannot be changed by others. Other buttons in a person's window: Erase personal data (privacy erasure), Reset authenticator, Sign out of device."] },
+  { id: "w-import", title: "Import and export the team", what: "In <b>Users &amp; hierarchy</b>, <b>Export</b> downloads the team as CSV. <b>Import</b> loads a CSV (Excel can save as CSV): download the template, fill it, <b>Check file</b> for a preview, then <b>Import</b>.", who: ["adm"],
+    steps: [
+      { t: "Import team", rows: ["a:Download template", "i:team.csv", "*a:Check file"], nav: "Settings", cap: "Choose the file and <b>Check file</b>: nothing is saved yet" },
+      { t: "Preview", rows: ["c:42 to create", "t:8 to update", "x:2 skipped", "t:Row 7: Reporting manager not found", "*b:Import"], nav: "Settings", cap: "Fix skipped rows if you like, then <b>Import</b>" },
+    ],
+    flow: ["Import", ["Fill the template", "Check file|preview only", "?Skipped rows?", "Fix the file", "+Import", "Give people an app PIN"], "People are matched by email or employee code. <b>reporting_manager</b> is an email or employee code, from the file or already in the system. Loops and unknown offices, departments or designations are skipped with a reason. The plan's user limit is respected."] },
+  { id: "w-pin", title: "Give a field member the phone app (App PIN)", what: "Open a person, check their <b>mobile number</b>, click <b>App PIN…</b> and <b>Generate PIN</b>. Send the ready message (download link, company code, number, PIN) by copy or WhatsApp. The PIN works once, only for that number, for 48 hours, and locks after 5 wrong tries. Activating on a new phone, or after a reinstall, needs a new PIN and removes the old phone.", who: ["adm"],
+    steps: [
+      { t: "Edit Asha K.", rows: ["i:Phone 98765 43210", "*a:App PIN…", "r:Erase personal data"], nav: "Settings", cap: "Open the person, click <b>App PIN…</b>" },
+      { t: "App PIN", rows: ["i:Field work only ▾", "*b:Generate PIN", "t:482917  (shown once)", "a:Copy message", "a:Open in WhatsApp"], nav: "Settings", cap: "Choose scope, generate, send the message" },
+    ],
+    flow: ["Phone lifecycle", ["Register person + number", "Generate PIN", "Person enters it once", "+Phone active", "?New phone or lost?", "Generate a new PIN, or Remove current phone"], "<b>Field work only</b> (recommended) blocks setup, admin and team tools on that phone. <b>Field + manager</b> adds the person's normal tools. When someone reports a changed number you get a notification; edit the number in this window and generate a new PIN."] },
+  { id: "w-exprules", title: "Expense rules (automatic travel claims)", what: "<b>Settings, Expense rules</b> turns tracked routes into claims. Pick a mode: <b>Off</b>, <b>Shadow</b> (calculated and shown, nobody paid) or <b>On</b> (claims created for approval after check-out). Set rate per km, minimum km, daily cap, daily and outstation allowance for everyone, then override by role, designation or vehicle.", who: ["adm"],
+    steps: [{ t: "Expense rules", rows: ["i:Mode: Shadow", "G:Rule|Everyone|Role: manager|Vehicle: car", "g:Rate per km|6||11", "g:Daily allowance|200|500|", "*b:Save rules"], nav: "Settings", cap: "Fill only the cells you need. The most specific rule wins" }],
+    flow: ["Rollout", ["Set rules", "Shadow for a month", "Compare with odometer or map", "?Numbers agree?", "+Switch to On", "Tune and repeat"], "Silent GPS stretches are shown as estimated and not paid unless you tick the option. Every claim still goes through approval."] },
+  { id: "w-office", title: "Offices, geo-fence, shifts, territories, leave", what: "<b>Branches &amp; geo-fence</b>: each office with a map point and check-in radius. <b>Shifts</b>: start, end, grace, weekly off. <b>Territories</b>: map areas with alerts. <b>Leave &amp; holidays</b>: leave types, days per year, holiday list. <b>Allowance &amp; approvals</b>: fuel rate, allowance and how many approval levels by amount.", who: ["adm"],
+    steps: [{ t: "Branches & geo-fence", rows: ["h:Branches & geo-fence", "b:+ New branch", "m", "g:Pune HQ|150 m|18.52, 73.85"], nav: "Settings", cap: "Click the map to set the point, choose the radius" }] },
+  { id: "w-crmset", title: "Lead, quote and message settings", what: "<b>Lead settings</b>: stages, sources, assignment rules (round-robin, pool), auto follow-up and auto-regret days, AI pass mark. <b>Quotes &amp; templates</b>: numbering, terms, discount approval. <b>Notifications</b>: email and message templates. <b>Lead sources &amp; telephony</b>: website and portal lead intake, call gateway. <b>Custom fields</b> and <b>Forms &amp; checklists</b> add your own fields to leads, customers and visits.", who: ["adm"],
+    steps: [{ t: "Lead settings", rows: ["h:Lead settings", "i:AI pass mark: 45", "i:Auto follow-up after: 3 days", "i:Assignment: round-robin", "b:Save"], nav: "Settings", cap: "Change a value and <b>Save</b>; it applies to new leads" }] },
+  { id: "w-erp", title: "ERPNext connection", what: "<b>Settings, ERPNext</b> links to your ERPNext site (URL, key and secret, stored encrypted) and chooses what to sync: customers, products, sales people, invoices. The <b>Field team</b> tab lists the people leads can be assigned to, synced from ERPNext Sales Persons.", who: ["adm"],
+    steps: [{ t: "ERPNext", rows: ["i:Site URL", "i:API key", "i:API secret", "c:Customers ☑  Products ☑", "*b:Test and sync"], nav: "Settings", cap: "Enter the details, choose what to sync, test" }] },
+  { id: "w-sec", title: "Security, privacy and the recycle bin", what: "<b>Security</b>: require an authenticator (MFA) for everyone, session length, the location-tracking notice and its version, how long raw location is kept, and the <b>audit log</b> of sensitive actions. <b>Recycle bin</b> keeps deleted records for 90 days so you can restore them. <b>Erase personal data</b> removes a person's identity and location history for good.", who: ["adm"],
+    steps: [{ t: "Recycle bin", rows: ["h:Recycle bin", "t:Deleted records are kept for 90 days", "G:Type|Record|Deleted", "g:Lead|Kiran Steel|9 Nov", "*a:Restore"], cap: "Open the bin, pick the record, <b>Restore</b>" }],
+    tip: "Turn on the authenticator for every admin. It protects the one login that can see everything." },
+];
+
+const VENDOR = [
+  { id: "w-clients", title: "Clients console (platform only)", what: "Used only by the vendor's super-admin, in the special workspace <code>_platform</code>. Create a client company, invite its administrator by a one-time link, see setup progress, change plan or seats, suspend, export a client's configuration as a template, or open the client as its administrator (recorded in the client's audit log). Public sign-up is off.", who: ["sup"],
+    steps: [{ t: "Clients", rows: ["h:Clients", "*b:+ New client", "G:Company|Plan|Setup|Users", "g:Proman|Growth|Done|34", "g:Acme|Trial|3 of 4 steps|1"], cap: "<b>+ New client</b> creates the company and its administrator invite" }],
+    flow: ["Onboarding a client", ["Create client", "Send administrator invite", "Administrator sets password", "Administrator finishes setup", "+Team can sign in"], "See the platform runbook in the repository for the exact steps and the first super-admin."] },
+];
+
+const part = (id, title, lead, items) => `<section class="part" id="${id}"><h2>${title}</h2><p class="lead mut">${lead}</p>${items.map(feat).join("")}</section>`;
+document.getElementById("app").innerHTML =
+  part("basics", "Getting around", "Sign in, the dashboard, notifications and search.", BASICS) +
+  part("field", "Field force", "Attendance, live tracking, routes, visits, tasks, leave and expenses.", FIELD) +
+  part("sales", "Sales &amp; CRM", "From first enquiry to payment collected, plus the reports that show how the team is doing.", SALES) +
+  part("ops", "Purchase &amp; support", "Suppliers, orders to them, partners and internal tickets.", OPS) +
+  part("admin", "Admin: set up and run", "For the company's administrators. Everything here is under Settings or the Admin menu.", ADM) +
+  part("vendor", "Vendor super-admin", "Only for the company that sells Fieldwise.", VENDOR) +
+  `<section class="part" id="help"><h2>Help &amp; feedback</h2><div class="faq">
+    <details><summary>I cannot see a menu item someone told me about</summary><p>Menus follow your role and the modules your company switched on. Ask your admin to check your role and <b>Settings, Setup guide, Modules</b>.</p></details>
+    <details><summary>A manager cannot see one of their team</summary><p>Visibility follows <b>Reports to</b>. Open the person in <b>Settings, Users &amp; hierarchy</b> and check who they report to, and that they are not disabled.</p></details>
+    <details><summary>I cannot sign in</summary><p>You need the company code, your email and your password. Use <b>Forgot your password?</b> for an emailed link (valid 60 minutes). If your company requires an authenticator, enter the 6-digit code too. After repeated mistakes the sign-in pauses for 15 minutes.</p></details>
+    <details><summary>The distance looks too low</summary><p>Only trusted GPS is counted. Stretches where the phone was off or had no GPS show as estimated and are not counted. Open <b>Route history</b> for that day to see the map and the quality score.</p></details>
+    <details><summary>I deleted something by mistake</summary><p>Admins can restore it from the <b>Recycle bin</b> for 90 days.</p></details>
+    <details><summary>Where is the phone app guide?</summary><p>The employee, manager and admin guide for the phone app is a separate document: "Fieldwise User Guide".</p></details>
+  </div><div class="grid2" style="margin-top:16px"><div class="card"><h3>When something looks wrong, tell us</h3><p class="small">Please write down: the <b>page</b>, <b>what you clicked</b>, <b>what you expected</b>, <b>what happened</b>, and a screenshot if you can.</p></div>
+  <div class="card"><h3>Send it to</h3><p><b>support@promaninfi.com</b></p></div></div></section>`;
+</script>
+</body></html>

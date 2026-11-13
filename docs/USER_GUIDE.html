@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Fieldwise Tester Guide</title>
+<title>Fieldwise User Guide</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
@@ -69,10 +69,11 @@ summary{cursor:pointer;font-weight:600}
 <header class="hero">
   <span class="mut small" style="font-weight:700;letter-spacing:.08em;text-transform:uppercase">Proman Infrastructure Services</span>
   <h1>Fieldwise: how to use it</h1>
-  <p class="mut" style="max-width:56ch">A short, visual guide for testers. Fieldwise keeps your field team on the map and your sales pipeline in one place. Each feature below shows what it does, how to use it in a few taps, and where it helps, a flow chart.</p>
+  <p class="mut" style="max-width:56ch">A short, visual guide for everyone who uses Fieldwise. It keeps your field team on the map and your sales pipeline in one place. Find your role below: <b>Employee</b> (the app on your phone), <b>Manager</b> (your team, on the web) or <b>Admin</b> (setup and running the system, on the web). Each feature shows what it does, how to use it in a few taps, and, where it helps, a flow chart.</p>
   <div class="who"><span class="chip">Everyone</span><span class="chip mgr">Manager and above</span><span class="chip adm">Admin only</span></div>
+  <div class="grid2" style="margin-top:10px"><div class="tip"><b>Employee</b> (field team): uses the <b>phone app</b>. Activate it once with the PIN from your admin, then it opens straight on Check in.</div><div class="tip"><b>Manager, Admin, MD:</b> use the <b>web version</b> in a browser (email, password). Setup and admin work are not in the phone app unless your admin gives a manager PIN.</div></div>
 </header>
-<nav class="top" aria-label="Sections"><a href="#start">Get started</a><a href="#field">Field-force management</a><a href="#crm">CRM</a><a href="#help">Help &amp; feedback</a></nav>
+<nav class="top" aria-label="Sections"><a href="#start">Get started</a><a href="#employee">Employee</a><a href="#manager">Manager</a><a href="#admin">Admin</a><a href="#crm">CRM</a><a href="#help">Help &amp; feedback</a></nav>
 <main id="app"></main>
 </div>
 <script>
@@ -112,21 +113,28 @@ function feat(f) {
 
 /* ---------- content ---------- */
 const START = [
-  { id: "g-install", title: "Install the Android app", what: "Open the download page on your phone, install the app, and sign in. The server address is already filled in.",
+  { id: "g-install", title: "Install the Android app", what: "Open the download page on your phone and install the app. Your admin sends you the link together with your PIN.", who: ["all"],
     steps: [
-      { t: "Download page", rows: ["t:…/download", "*b:Download app", "t:Version 1.1.0", "a:Allow install, then Open"], cap: "Open the link and tap <b>Download</b>" },
-      { t: "Sign in", rows: ["i:Workspace (e.g. proman)", "i:Email", "i:Password", "*b:Sign in"], cap: "Enter workspace, email and password" },
+      { t: "Download page", rows: ["t:…/download", "*b:Download app", "t:Version 1.3.0", "a:Allow install, then Open"], cap: "Open the link and tap <b>Download</b>" },
+      { t: "Install", rows: ["t:Install blocked?", "t:Allow installs from this source", "*b:Install"], cap: "Android asks once to allow installs from your browser. Allow it" },
+      { t: "Open the app", rows: ["t:Fieldwise", "*b:Open"], cap: "Open the app. Next: activate your phone" },
+    ],
+    tip: "Using an iPhone? Open the web address in Safari, tap Share, then <b>Add to Home Screen</b>. You can check in, do visits and claim expenses, but the iPhone web app cannot record your route in the background." },
+  { id: "g-activate", title: "Activate your phone with the PIN", what: "Your admin registers you with your mobile number and sends you a 6-digit PIN. You enter it once. After that the app never asks you to sign in again and opens straight on Check in.", who: ["all"],
+    steps: [
+      { t: "Activate this phone", rows: ["i:Company code (e.g. proman)", "i:Your mobile number", "i:PIN", "*b:Activate"], cap: "Type the company code, <b>your registered mobile number</b> and the PIN" },
       { t: "How tracking works", rows: ["t:Fieldwise records your route while you are checked in.", "t:Your manager can see it.", "*b:I understand"], cap: "Read the tracking notice and tap <b>I understand</b>" },
       { t: "Set up tracking", rows: ["c:✓ Location is ON", "x:✗ Allow all the time", "x:✗ Battery: Unrestricted", "*b:Fix"], cap: "Turn each red item green. This keeps tracking alive all day" },
+      { t: "Check in", rows: ["w:Not checked in", "*b:CHECK IN"], cap: "From now on the app opens here. Nothing to sign in" },
     ],
-    flow: ["Your first 5 minutes", ["Install the app", "Sign in", "Read the tracking notice", "Fix the red items|they turn green on their own", "+You are ready"]],
-    tip: "On Xiaomi, Oppo, Vivo, Samsung and similar phones the guide shows one extra step (Autostart). Do it, or tracking can stop when the screen is off." },
+    flow: ["PIN rules", ["Admin registers you|with your mobile number", "Admin gives you a PIN", "?Enter it within 48 hours, on your number?", "+Phone activated|stays signed in", "-Wrong or expired|ask the admin for a new PIN"], "The PIN works once. After 5 wrong tries it locks: ask your admin for a new one. A new phone, or reinstalling the app, needs a new PIN. Your old data is kept."],
+    tip: "Changed your mobile number? Tap your name (top right), then <b>My mobile number changed</b>. Your admin is told and sends a new PIN. On Xiaomi, Oppo, Vivo and Samsung there is one extra step (Autostart): do it, or tracking can stop when the screen is off." },
 ];
 
 const FIELD = [
-  { id: "f-attendance", title: "Check in and check out", what: "Marks your attendance with your location and, if your phone has it, your fingerprint or face. Tracking starts when you check in and stops when you check out.",
+  { id: "f-attendance", title: "Check in and check out", what: "The app opens on one big <b>Check in</b> button. It marks your attendance with your location and, if your phone has it, your fingerprint or face. Tracking starts when you check in and stops when you check out.",
     steps: [
-      { t: "Attendance", rows: ["w:Not checked in", "t:Today 9:30 to 6:30", "*b:Check in", "m"], cap: "Open <b>Attendance</b>, tap <b>Check in</b>" },
+      { t: "Check-in", rows: ["w:Not checked in", "t:Today 9:30 to 6:30", "*b:CHECK IN", "m"], cap: "Open the app and tap the big <b>Check in</b> button" },
       { t: "Confirm it's you", rows: ["t:Touch the fingerprint sensor", "m"], cap: "Confirm with fingerprint or face" },
       { t: "Attendance", rows: ["c:On duty since 9:41", "t:Tracking on", "m", "*r:Check out"], cap: "You are on duty. Tap <b>Check out</b> at the end of the day" },
     ],
@@ -165,9 +173,10 @@ const FIELD = [
     steps: [
       { t: "Leaves", rows: ["t:Balance: 8 days", "*b:Apply for leave"], cap: "<b>Leaves</b>, then <b>Apply for leave</b>" },
       { t: "New claim", rows: ["i:Category", "i:Amount", "i:Photo of bill", "*b:Save"], cap: "<b>Expenses</b>, then <b>+ New claim</b>. Add a bill photo" },
-      { t: "Expenses", rows: ["l:Fuel · ₹850|Approved", "w:Pending", "*a:Claim fuel from GPS"], cap: "<b>Claim fuel from GPS</b> works out the distance for you" },
+      { t: "Expenses", rows: ["c:Today's route: 42 km", "t:Rules give ₹252", "l:Fuel · ₹850|Approved Auto", "*b:+ New claim"], cap: "A bar shows what your route earns. Add your own claims with <b>+ New claim</b>" },
     ],
-    flow: ["Approval", ["You submit", "?Manager decision", "+Approved", "Paid|status shown"], "Rejected claims show the manager's reason so you can fix and resubmit."], },
+    flow: ["Approval", ["You submit", "?Manager decision", "+Approved", "Paid|status shown"], "Rejected claims show the manager's reason so you can fix and resubmit."],
+    tip: "If your company turned on <b>automatic expenses</b>, your travel claim is created for you after you check out, from your tracked route. It carries an <b>Auto</b> label, and you cannot claim the same fuel again for that day. You still add other costs (food, lodging, tolls) yourself, with a bill photo." },
   { id: "f-people", title: "Roster, work hours and announcements", what: "The roster shows who works when. Work hours shows each day's hours and unusual activity. Announcements are notices from the company.", who: ["all", "mgr"],
     steps: [
       { t: "Roster", rows: ["s:This week", "l:Mon-Sat|9:30 to 6:30", "l:Sun|Off"], cap: "<b>Roster</b>: your shifts and holidays" },
@@ -180,7 +189,7 @@ const CRM = [
   { id: "c-leads", title: "Leads and the AI check", what: "A lead is a possible customer. Add it in a few fields. Fieldwise automatically reviews every new lead, scores it, and writes <b>why</b> in the lead's remarks: qualified or rejected.",
     steps: [
       { t: "Leads", rows: ["*b:+ Add lead", "l:Mehta Infra|New · Hot", "l:Kiran Steel|Contacted"], cap: "<b>Leads</b>, then <b>+ Add lead</b>" },
-      { t: "Add lead", rows: ["i:Name / company", "i:Phone", "i:Product", "i:Owner (sales team)", "*b:Save"], cap: "Fill name, phone, product. Pick the owner from the sales team" },
+      { t: "Add lead", rows: ["i:Name / company", "i:Phone", "i:Product", "i:Owner (field team)", "*b:Save"], cap: "Fill name, phone, product. Pick the owner from the field team" },
       { t: "Lead", rows: ["c:AI: Qualified 78/100", "t:Reason: real phone, product match, clear quantity", "*a:Re-run AI"], cap: "Read the AI verdict and reasons in the lead" },
     ],
     flow: ["Lead life", ["New", "Contacted", "Visited", "Qualified", "Quoted", "Negotiation", "+Deal won", "-Deal lost"], "Every change is saved in the lead's timeline. Move a lead by opening it and changing the stage, or drag it on the Board view."],
@@ -194,7 +203,7 @@ const CRM = [
       { t: "Follow-ups", rows: ["l:Call Mehta Infra|Today 11:00", "*c:Mark done ✓"], cap: "Mark it done and add the next one" },
     ],
     flow: ["Reminder flow", ["Follow-up set", "Reminder before it's due", "?Done on time?", "+Done", "-Overdue|manager is told"]] },
-  { id: "c-cust", title: "Customers, contacts and products", what: "Customers and contacts are the companies and people you deal with. Products is your catalogue. Customers, products and the sales team come from ERPNext and stay in sync.",
+  { id: "c-cust", title: "Customers, contacts and products", what: "Customers and contacts are the companies and people you deal with. Products is your catalogue. Customers, products and the field team come from ERPNext and stay in sync.",
     steps: [
       { t: "Customers", rows: ["i:Search…", "l:ABC Constructions|Pune · 3 contacts", "l:Sharma Traders|Mumbai"], cap: "<b>Customers</b>: search and open one" },
       { t: "ABC Constructions", rows: ["s:Contacts", "l:Mr Rao|98xxxxxx", "s:Activity", "l:Visit 3 Nov|MOM sent"], cap: "See contacts, visits, calls, notes and orders in one place" },
@@ -222,15 +231,88 @@ const CRM = [
     ] },
 ];
 
+
+const MGR = [
+  { id: "m-team", title: "See your team and who reports to whom", what: "Everyone has a <b>Reporting manager</b>. You see your own data and everyone under you, down the whole chain. People outside your chain stay hidden from you. Admins and the owner see everyone.", who: ["mgr"],
+    steps: [
+      { t: "Users", rows: ["l:Asha K.|Reports to: Ravi S.", "l:Ravi S.|Reports to: You", "*a:Edit"], cap: "Your admin keeps the <b>Reports to</b> field up to date" },
+      { t: "Anywhere", rows: ["i:Whole team ▾", "l:Ravi's team", "l:Meena's team", "*a:Ravi's team"], cap: "Pickers and reports list your team. Choose a person to see their branch" },
+    ],
+    flow: ["How visibility works", ["MD", "Regional manager", "Team lead", "Field employee", "+You see yourself and everyone below you"], "If a manager is disabled, their direct reports move up to the manager's manager, so nobody is left without one."] },
+  { id: "m-live", title: "Live team and Phone health", what: "The <b>Live team</b> map shows who is on duty now. <b>Phone health</b> shows whose phone settings could stop tracking, and why a person has gone silent.", who: ["mgr"],
+    steps: [
+      { t: "Live team", rows: ["m", "l:Asha K.|2 min ago · 74%", "l:Ravi S.|GPS off"], cap: "Open <b>Live team</b>: green is live, grey is offline" },
+      { t: "Phone health", rows: ["x:Ravi S.: battery limit", "c:Asha K.: all good", "*a:Phone health"], cap: "Open <b>Phone health</b> to see the likely reason" },
+    ],
+    flow: ["Silent phone", ["No location for 12 min", "Alert to you|with the likely reason", "You message the person", "+Tracking resumes"]] },
+  { id: "m-routes", title: "Route history: a month of travel, drilled down", what: "Choose <b>Route history</b> to see, for a month, how far each of your direct reports travelled. Click <b>Open team ›</b> on anyone who has their own team to see their people. Click <b>Days</b> for a day-by-day list, and click a day to see the route on a map.", who: ["mgr"],
+    steps: [
+      { t: "Route history", rows: ["i:This month ▾", "l:Ravi S. · team of 6|412 km", "l:Asha K.|238 km", "*a:Open team ›"], cap: "You see your direct reports. <b>Open team ›</b> goes one level down" },
+      { t: "Ravi S.: days", rows: ["l:3 Nov|42 km · 3 stops", "l:4 Nov|38 km · 2 stops", "*c:Quality 92%"], cap: "<b>Days</b> lists each day with distance, stops and a quality score" },
+      { t: "Day map", rows: ["m", "t:42 km tracked", "t:3 stops · quality 92%"], cap: "Click a day for the route: green start, red end, amber stops" },
+    ],
+    flow: ["Drill down", ["Me", "Direct reports", "Open team ›", "Their reports", "Days", "+Day map"], "Pick <b>This month</b>, <b>Last month</b>, or any month. <b>Export CSV</b> downloads one row per person per day for everyone under the person you are viewing."],
+    tip: "<b>Tracked km</b> is what the app trusts. <b>Estimated km</b> are stretches where the phone was silent (off or no GPS): shown, but not counted. A low quality score means many gaps, so check with the person before approving big claims." },
+  { id: "m-approve", title: "Approve expenses and leave", what: "Claims and leave requests from your team wait for you. Claims made automatically from a route carry an <b>Auto</b> label and the distance used, so you can check them quickly.", who: ["mgr"],
+    steps: [
+      { t: "Expenses", rows: ["c:Team claims", "l:Asha · Fuel ₹252|Auto · 42 km", "*b:Approve", "a:Reject"], cap: "<b>Expenses</b>, then <b>Team claims</b>. Approve or reject, with a reason" },
+      { t: "Check the route", rows: ["t:Route history, day map", "t:42 km, quality 92%"], cap: "Open <b>Route history</b> for that day if a claim looks high" },
+    ],
+    flow: ["Claim approval", ["Route tracked", "Claim created|auto or by hand", "?You decide", "+Approved, then paid", "-Rejected|with your reason"]] },
+];
+
+const ADM = [
+  { id: "a-import", title: "Add your team from a file", what: "Instead of adding people one by one, upload a CSV file (Excel can save as CSV). You can also download your current team as a file.", who: ["adm"],
+    steps: [
+      { t: "Users & hierarchy", rows: ["*a:Export", "*a:Import", "b:+ Add user"], cap: "Settings, <b>Users &amp; hierarchy</b>. Buttons: Export and Import" },
+      { t: "Import team", rows: ["a:Download template", "i:team.csv", "*a:Check file"], cap: "Download the template, fill it in, choose the file, tap <b>Check file</b>" },
+      { t: "Preview", rows: ["c:42 to create", "t:8 to update", "x:2 skipped", "*b:Import"], cap: "Read the preview. Fix any skipped rows, then tap <b>Import</b>" },
+    ],
+    flow: ["Import", ["Fill the template", "Check file|preview, nothing saved", "?Any skipped rows?", "Fix the file", "+Import", "Give each person an app PIN"], "Columns: name, email, phone, role, employee_code, <b>reporting_manager</b> (email or employee code), branch, department, designation, territory, vehicle, active. People already in the system are matched by email or employee code and updated. A row is skipped for a bad email, an unknown office, department or designation, a manager who is not found, or a reporting loop."],
+    tip: "New people have no password. Field team members get an app PIN; managers and admins use <b>Forgot your password</b> on the web, or you set one when you edit them." },
+  { id: "a-hier", title: "Set who reports to whom", what: "Each person has a <b>Reports to</b> manager. This one field decides who sees whose data, in the dashboards, Route history, approvals and the live map.", who: ["adm"],
+    steps: [
+      { t: "Edit user", rows: ["i:Asha K.", "i:Role: Employee", "*i:Reports to: Ravi S.", "*b:Save"], cap: "Settings, <b>Users &amp; hierarchy</b>, open a person, choose <b>Reports to</b>" },
+    ],
+    flow: ["Rules the system keeps", ["Pick a manager", "?Loop or disabled manager?", "-Refused|with a clear message", "+Saved"], "Nobody can report to themselves or to someone below them. A disabled person cannot be chosen. When you disable a manager, their direct reports move up one level and this is logged."] },
+  { id: "a-pin", title: "Give a field member the app (App PIN)", what: "Register the person with their <b>mobile number</b>, then generate a one-time PIN. Send them the download link and the PIN. The PIN works only for that number, only once, for 48 hours.", who: ["adm"],
+    steps: [
+      { t: "Edit Asha K.", rows: ["i:Phone 98765 43210", "*a:App PIN…", "r:Erase personal data"], cap: "Open the person (check their phone number), tap <b>App PIN…</b>" },
+      { t: "App PIN", rows: ["i:Mobile number", "i:Field work only ▾", "*b:Generate PIN"], cap: "Choose what the app may do, then <b>Generate PIN</b>" },
+      { t: "App PIN", rows: ["t:PIN (shown once)", "t:482 917", "a:Copy message", "*a:Open in WhatsApp"], cap: "Copy the ready message or send it by WhatsApp: link, company code, number, PIN" },
+      { t: "Users", rows: ["l:Asha K.|Pixel 8", "c:field only · seen 9:41"], cap: "Once she activates, her phone shows in the <b>App phone</b> column" },
+    ],
+    flow: ["Phone lifecycle", ["Register person + number", "Generate PIN", "Person enters PIN|once", "+Phone active", "?New phone or reinstall?", "Generate a new PIN|old phone is removed"], "<b>Field work only</b> (recommended): check-in, visits, tasks, expenses. Setup, admin and team tools are blocked on that phone, even for a manager. <b>Field + manager</b> also gives that person their normal team tools on the phone. Lost phone: open the person, <b>App PIN…</b>, <b>Remove current phone</b>."],
+    tip: "A person who changed their number sends you a notification. Edit the number in the PIN dialog and generate a new PIN." },
+  { id: "a-exp", title: "Expense rules: automatic travel claims", what: "Tell the system how to turn each person's tracked route into expense claims. Start in <b>Shadow</b> mode: amounts are calculated and shown, but nobody is paid from them. Switch to <b>On</b> when they match reality.", who: ["adm"],
+    steps: [
+      { t: "Expense rules", rows: ["*i:Mode: Shadow", "i:Rate per km: 6", "i:Daily allowance: 200", "*b:Save rules"], cap: "Settings, <b>Expense rules</b>. Choose the mode and the amounts" },
+      { t: "Expense rules", rows: ["s:Overrides", "i:Role: manager · 500", "i:Vehicle: car · 11/km", "i:Designation: Sr Exec"], cap: "Set different rates per role, designation or vehicle. Set each person's <b>vehicle</b> on their user" },
+    ],
+    flow: ["Rollout", ["Set the rules", "Shadow for a month", "Compare with odometer or map", "?Numbers agree?", "+Switch to On|claims are created for approval", "Adjust rates and repeat"], "Rules: rate per km, minimum km, daily cap, daily allowance, outstation allowance (when the furthest point from the start is over your km limit). The most specific rule wins: everyone, then role, then designation, then vehicle."],
+    tip: "Distance counts only trusted GPS. Stretches where the phone was silent are shown as <b>estimated</b> and not paid unless you tick <b>also pay for silent stretches</b>. A hand-made fuel claim is blocked for a day that already has an automatic one." },
+  { id: "a-setup", title: "First-time setup and other settings", what: "New workspaces start with a short <b>Setup guide</b> (company, modules, work rules, offices) that your administrator must finish before the team can sign in. Everything else lives in <b>Settings</b>.", who: ["adm"],
+    steps: [
+      { t: "Settings", rows: ["l:Users & hierarchy", "l:Field team", "l:Expense rules", "l:Branches & geo-fence", "l:Leave & holidays"], cap: "Tabs for people, offices, shifts, leave, forms, AI pass mark and more" },
+    ],
+    tip: "The <b>Field team</b> tab lists the sales people leads can be assigned to (synced from ERPNext). Reports, live team and Route history are for managers and above." },
+];
+
 const part = (id, title, lead, items) => `<section class="part" id="${id}"><h2>${title}</h2><p class="lead mut">${lead}</p>${items.map(feat).join("")}</section>`;
+const pick = (arr, ids) => ids.map(i => arr.find(f => f.id === i));
 document.getElementById("app").innerHTML =
   part("start", "Get started", "Do this once on your phone.", START) +
-  part("field", "Field-force management", "Attendance, live tracking, visits and everything a person in the field does in a day.", FIELD) +
-  part("crm", "CRM", "Leads, customers, quotes and money, from first enquiry to payment collected.", CRM) +
+  part("employee", "Employee: your day in the field", "For the field team, in the phone app. Check in, visit customers, claim expenses.", pick(FIELD, ["f-attendance", "f-track", "f-visits", "f-tasks", "f-beat", "f-leave"])) +
+  part("manager", "Manager: your team", "On the web. See your team, their routes and approvals.", [...MGR, ...pick(FIELD, ["f-people"])]) +
+  part("admin", "Admin: set up and run", "On the web. Add people, give out the app, set expense rules.", ADM) +
+  part("crm", "CRM", "Leads, customers, quotes and money, from first enquiry to payment collected. Used by employees and managers alike.", CRM) +
   `<section class="part" id="help"><h2>Help &amp; feedback</h2>
    <div class="faq">
     <details><summary>Tracking stopped or I got a “route stopped” alert</summary><p>Open the app. Open the user menu (your name, top right), tap <b>Tracking setup &amp; health</b>, and turn every red item green. Make sure location is <b>Allow all the time</b> and battery is <b>Unrestricted</b>.</p></details>
-    <details><summary>I cannot sign in</summary><p>You need three things: the workspace name (for example <b>proman</b>), your email, and your password. Signing in on a new phone signs you out of the old one.</p></details>
+    <details><summary>The PIN is not accepted</summary><p>Check three things: the company code, the <b>mobile number your admin registered</b> (not another number of yours), and the PIN. A PIN works once and for 48 hours, and locks after 5 wrong tries. Ask your admin for a new one.</p></details>
+    <details><summary>I changed my phone or reinstalled the app</summary><p>Ask your admin for a new PIN and activate again. Your old data stays. The old phone stops working.</p></details>
+    <details><summary>Managers and admins: I cannot sign in on the web</summary><p>You need the company code, your email and your password. Use <b>Forgot your password?</b> if needed.</p></details>
+    <details><summary>My travel claim looks too low</summary><p>Only trusted GPS is counted. If your phone was off or had no GPS for a while, those stretches are shown as estimated and not counted. Tell your manager; they can see the route and correct the claim.</p></details>
     <details><summary>The app says “Update available”</summary><p>Tap <b>Download update</b>, open the file and install. You stay signed in and keep your data.</p></details>
     <details><summary>I have no internet</summary><p>Check-ins and location points are saved on the phone and sent automatically when you are back online. A small bar shows how many items are waiting.</p></details>
     <details><summary>Fingerprint does not work</summary><p>Fingerprint or face is used only if your phone has one set up. Otherwise check-in still works with your location.</p></details>
