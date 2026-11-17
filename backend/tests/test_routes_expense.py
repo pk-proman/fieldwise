@@ -102,3 +102,24 @@ def test_expense_modes_and_history_scope(client):
     assert d["found"] and len(d["polyline"]) >= 2
     assert "rep@rt.com" not in client.get(f"/api/tracking/history/export?month={m}", headers=bh).text or True
     assert client.get(f"/api/tracking/history/person?user_id={boss}&month={m}", headers=rh).status_code == 403
+
+
+def test_period_summary(client):
+    from datetime import datetime, timedelta
+    from conftest import login
+    ws, hdr = signup(client, "PeriodCo", "own@pd.com")
+    rep = client.post("/api/users", headers=hdr, json={"name": "Rep", "email": "rep@pd.com", "password": "Passw0rd!x", "role": "employee"}).json()["id"]
+    other = client.post("/api/users", headers=hdr, json={"name": "Other", "email": "oth@pd.com", "password": "Passw0rd!x", "role": "employee"}).json()["id"]
+    client.put("/api/expenses/policy", headers=hdr, json={"mode": "shadow", "default": {"rate_per_km": 5}})
+    rh = login(client, ws, "rep@pd.com")
+    day = datetime.utcnow().replace(hour=4, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    pings, lat, ts = [], 28.6, day
+    for i in range(40):
+        lat += 0.0009; ts += timedelta(seconds=30)
+        pings.append({"ts": ts.isoformat(), "lat": lat, "lng": 77.2, "accuracy": 8})
+    client.post("/api/tracking/pings", headers=rh, json=pings)
+    start = (day - timedelta(days=3)).date().isoformat()
+    r = client.get(f"/api/expenses/period?start={start}&end={datetime.utcnow().date().isoformat()}", headers=rh).json()
+    assert r["totals"]["km"] > 3 and r["mode"] == "shadow" and r["days"][0]["calc"]["fuel"] > 10
+    assert client.get(f"/api/expenses/period?user_id={other}", headers=rh).status_code == 403
+    assert client.get("/api/expenses/period?start=2026-01-01&end=2026-12-31", headers=rh).status_code == 422

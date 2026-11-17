@@ -17,7 +17,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 from ..db import SessionLocal
-from ..models import (Tenant, User, Lead, Customer, Product, Attendance, ExpenseClaim, SyncLog, utcnow)
+from ..models import (Tenant, User, Lead, Customer, Product, Attendance, ExpenseClaim, LeaveRequest, LeaveType, SyncLog, utcnow)
 from ..security import hash_password
 
 log = logging.getLogger("fieldwise.erpnext")
@@ -428,20 +428,61 @@ def push_expenses(db, t: Tenant, client, ids=None) -> int:
         q = q.where(ExpenseClaim.id.in_(ids or [0]))
     for e, emp, _ in db.execute(q).all():
         if not emp:
+            e.erp_error = "This person has no ERPNext employee linked (sync employees first)."
             continue
         doc = {"employee": emp, "posting_date": e.day.isoformat(), "company": cfg.get("company"), "expense_approver": cfg.get("expense_approver"),
                "payable_account": cfg.get("payable_account"),
                "expenses": [{"expense_date": e.day.isoformat(), "expense_type": EXPENSE_TYPE_MAP.get(e.category, "Others"),
                              "description": e.description or e.category, "amount": e.amount, "sanctioned_amount": e.amount}]}
         doc = {k: v for k, v in doc.items() if v}
-        e.erp_ref = client.create("Expense Claim", doc)["name"]
+        try:
+            e.erp_ref, e.erp_error = client.create("Expense Claim", doc)["name"], ""
+            n += 1
+        except ERPError as ex:   # one bad claim must not stop the others; it is retried on the next run
+            e.erp_error = str(ex)[:300]
+    return n
+
+
+def push_leave(db, t: Tenant, client, ids=None) -> int:
+    """Approved leave becomes a submitted Leave Application in ERPNext (so balances and payroll follow). The leave type name must exist in ERPNext (Sync > Leave types pulls them)."""
+    cfg, n = _cfg(t), 0
+    q = select(LeaveRequest, User.erp_employee, LeaveType.name).join(User, User.id == LeaveRequest.user_id).join(LeaveType, LeaveType.id == LeaveRequest.leave_type_id).where(
+        LeaveRequest.tenant_id == t.id, LeaveRequest.status == "approved", LeaveRequest.erp_ref == "", LeaveRequest.deleted_at.is_(None))
+    if ids is not None:
+        q = q.where(LeaveRequest.id.in_(ids or [0]))
+    for r, emp, ltype in db.execute(q).all():
+        if not emp:
+            r.erp_error = "This person has no ERPNext employee linked (sync employees first)."
+            continue
+        doc = {"employee": emp, "leave_type": ltype, "from_date": r.from_day.isoformat(), "to_date": r.to_day.isoformat(), "posting_date": utcnow().date().isoformat(),
+               "description": (r.reason or "Applied in Fieldwise")[:140], "company": cfg.get("company"), "leave_approver": cfg.get("leave_approver"),
+               "status": "Approved", "follow_via_email": 0, "docstatus": 1}
+        doc = {k: v for k, v in doc.items() if v not in (None, "")}
+        try:
+            r.erp_ref, r.erp_error = client.create("Leave Application", doc)["name"], ""
+            n += 1
+        except ERPError as ex:
+            r.erp_error = str(ex)[:300]
+    return n
+
+
+def pull_leave_types(db, t: Tenant, client) -> int:
+    """Brings ERPNext's leave types in (name, yearly days, paid) so applications written back use names ERPNext knows."""
+    n = 0
+    for r in client.list("Leave Type", ["name", "max_leaves_allowed", "is_lwp"]):
+        lt = db.scalar(select(LeaveType).where(LeaveType.tenant_id == t.id, LeaveType.name == r["name"], LeaveType.deleted_at.is_(None)))
+        if not lt:
+            lt = LeaveType(tenant_id=t.id, name=r["name"])
+            db.add(lt)
+        lt.days_per_year, lt.paid = float(r.get("max_leaves_allowed") or lt.days_per_year or 12), not bool(r.get("is_lwp"))
         n += 1
     return n
 
 
 # ----------------------------------------- orchestration -----------------------------------------
 DOMAINS = {"invoices": ("in", pull_invoices), "employees": ("in", pull_employees), "products": ("in", pull_products), "sales_team": ("in", pull_sales_team), "crm_pull": ("in", pull_crm),
-           "crm_push": ("out", push_crm), "attendance": ("out", push_attendance), "expenses": ("out", push_expenses)}
+           "crm_push": ("out", push_crm), "attendance": ("out", push_attendance), "expenses": ("out", push_expenses),
+           "leave": ("out", push_leave), "leave_types": ("in", pull_leave_types)}
 
 
 def run_sync(tenant_id: int, domain: str, transport=None) -> dict:
@@ -505,6 +546,21 @@ def push_expenses_task(tenant_id: int, ids: list[int]):
     except Exception as e:
         db.rollback()
         _log(db, tenant_id, "expenses", "out", False, 0, str(e))
+        db.commit()
+    finally:
+        db.close()
+
+
+def push_leave_task(tenant_id: int, ids: list[int]):
+    db = SessionLocal()
+    try:
+        t = db.get(Tenant, tenant_id)
+        n = push_leave(db, t, ERPNextClient(_cfg(t)), ids)
+        _log(db, tenant_id, "leave", "out", True, n)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        _log(db, tenant_id, "leave", "out", False, 0, str(e))
         db.commit()
     finally:
         db.close()

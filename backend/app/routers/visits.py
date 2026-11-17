@@ -1,28 +1,44 @@
-from datetime import timedelta
-import hashlib
-import hmac
-import os
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, timedelta
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import select
 from ..deps import Ctx, current
-from ..models import Visit, Customer, Contact, User, utcnow
-from ..common import to_dict, get_or_404, decode_data_url, save_upload, watermark_text
+from ..models import Visit, Customer, Contact, User, Lead, Product, utcnow
+from ..common import to_dict, get_or_404, decode_data_url, save_upload, watermark_text, log_activity, local_day_bounds_utc, parse_day, local_today
 from ..geo import haversine_m
-from ..notify import notify, send_email, send_sms
+from ..notify import notify, send_email
 from .. import svc
-from ..security import make_otp
-from .. import config
 
 router = APIRouter(prefix="/visits", tags=["visits"])
 
+PROSPECT_KEYS = ("name", "phone", "email", "company", "city", "address", "product_id", "notes", "temperature")
 
-def _h(otp: str, vid: int) -> str:
-    return hmac.new(config.SECRET_KEY.encode(), f"{vid}:{otp}".encode(), hashlib.sha256).hexdigest()
+
+def _clean(d: dict | None) -> dict:
+    out = {}
+    for k in PROSPECT_KEYS:
+        v = (d or {}).get(k)
+        if v in (None, ""):
+            continue
+        out[k] = int(v) if k == "product_id" and str(v).isdigit() else (v.strip() if isinstance(v, str) else v)
+    return out
+
+
+class CustomerIn(BaseModel):
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    company: str = ""
+    city: str = ""
+    address: str = ""
+    product_id: int | None = None
+    notes: str = ""
+    temperature: str = ""
 
 
 class StartIn(BaseModel):
-    customer_id: int
+    customer_id: int | None = None
+    customer: CustomerIn | None = None      # a new customer / lead captured on the spot (can be completed later)
     task_id: int | None = None
     lat: float | None = None
     lng: float | None = None
@@ -30,70 +46,91 @@ class StartIn(BaseModel):
 
 @router.post("/start")
 def start(body: StartIn, ctx: Ctx = Depends(current)):
-    return begin_visit(ctx, body.customer_id, body.task_id, body.lat, body.lng)
+    return begin_visit(ctx, body.customer_id, body.task_id, body.lat, body.lng, body.customer.model_dump() if body.customer else None)
 
 
-def begin_visit(ctx: Ctx, customer_id: int, task_id, lat, lng) -> dict:
-    body = StartIn(customer_id=customer_id, task_id=task_id, lat=lat, lng=lng)
-    cust = get_or_404(ctx.db, Customer, body.customer_id, ctx.tid)
-    open_visit = ctx.db.scalar(select(Visit).where(Visit.tenant_id == ctx.tid, Visit.user_id == ctx.user.id, Visit.ended_at.is_(None)))
-    if open_visit:
-        raise HTTPException(409, "You already have a visit in progress. End it first.")
-    if cust.lat is not None and body.lat is not None and ctx.setting("enforce_geofence", True):
-        d = haversine_m(body.lat, body.lng, cust.lat, cust.lng)
-        if d > ctx.setting("geofence_default_m", 150) * 3:
-            raise HTTPException(403, f"You are {int(d)} m from {cust.name}. Reach the customer's location to start the visit.")
-    v = Visit(tenant_id=ctx.tid, user_id=ctx.user.id, customer_id=cust.id, task_id=body.task_id, lat=body.lat, lng=body.lng)
+def begin_visit(ctx: Ctx, customer_id, task_id, lat, lng, prospect: dict | None = None) -> dict:
+    """Check-in at a customer: records where you are and makes the visit ACTIVE. No OTP. Pick an existing customer or type a new one (name is enough to start)."""
+    cust, pdata = None, _clean(prospect)
+    if customer_id:
+        cust = get_or_404(ctx.db, Customer, customer_id, ctx.tid)
+    elif not pdata.get("name"):
+        raise HTTPException(422, "Choose a customer, or type the new customer's name.")
+    if lat is None or lng is None:
+        raise HTTPException(422, "Location is needed to check in at the customer. Turn on location and try again.")
+    if ctx.db.scalar(select(Visit.id).where(Visit.tenant_id == ctx.tid, Visit.user_id == ctx.user.id, Visit.ended_at.is_(None))):
+        raise HTTPException(409, "You already have a visit in progress. Check out of it first.")
+    dist = None
+    if cust and cust.lat is not None:
+        dist = haversine_m(lat, lng, cust.lat, cust.lng)
+        if ctx.setting("enforce_visit_geofence", False) and dist > ctx.setting("geofence_default_m", 150) * 3:
+            raise HTTPException(403, f"You are {int(dist)} m from {cust.name}. Reach the customer's location to check in.")
+    v = Visit(tenant_id=ctx.tid, user_id=ctx.user.id, customer_id=cust.id if cust else None, task_id=task_id, lat=lat, lng=lng, start_dist_m=dist, prospect=pdata or None)
     ctx.db.add(v)
-    ctx.db.flush()
-    resp = {"visit": None, "otp_required": False}
-    if ctx.setting("require_visit_otp", True):
-        phone = cust.phone or ctx.db.scalar(select(Contact.phone).where(Contact.tenant_id == ctx.tid, Contact.customer_id == cust.id, Contact.phone != ""))
-        if not phone:
-            raise HTTPException(422, "This customer has no phone number for OTP verification. Add one first.")
-        otp = make_otp()
-        v.otp_hash, v.otp_expires = _h(otp, v.id), utcnow() + timedelta(minutes=15)
-        msg = f"{otp} is your visit verification code for {ctx.user.name} ({ctx.tenant.name}). Share it only if the visit took place."
-        digits = "".join(ch for ch in phone if ch.isdigit())
-        sent, _ = svc.gateway_call(ctx.tenant, "sms", {"to": digits if len(digits) != 10 else "91" + digits, "message": msg})  # the workspace's own SMS gateway first
-        sent = sent or send_sms(phone, msg)                                                                                    # then the platform-wide one
-        resp.update(otp_required=True, sent_to=phone[:3] + "•••" + phone[-3:])
-        if not sent:
-            if config.ENV == "production":  # never reveal the code to the person who is supposed to collect it from the customer
-                raise HTTPException(503, "The verification code couldn't be sent: no working SMS gateway. Ask an administrator to set one up in Settings, or switch off visit OTP.")
-            resp["dev_otp"] = otp  # development / demo only so the flow can be tried without a gateway
     ctx.db.commit()
-    resp["visit"] = to_dict(v)
-    return resp
+    return {"visit": to_dict(v), "otp_required": False, "distance_m": round(dist) if dist is not None else None}
 
 
-class OtpIn(BaseModel):
-    otp: str
-
-
-@router.post("/{vid}/verify-otp")
-def verify(vid: int, body: OtpIn, ctx: Ctx = Depends(current)):
+@router.post("/{vid}/customer")
+def save_customer(vid: int, body: CustomerIn, bg: BackgroundTasks, ctx: Ctx = Depends(current)):
+    """Add or update customer details during (or after) the visit. For a known customer the details are written to the customer record straight away."""
     v = get_or_404(ctx.db, Visit, vid, ctx.tid)
     if v.user_id != ctx.user.id:
         raise HTTPException(403, "This is not your visit.")
-    if v.otp_verified:
-        return to_dict(v)
-    if v.otp_attempts >= 5:
-        raise HTTPException(429, "Too many wrong codes. Start the visit again.")
-    if not v.otp_expires or v.otp_expires < utcnow():
-        raise HTTPException(410, "This code expired. Start the visit again for a new code.")
-    v.otp_attempts += 1
-    if not hmac.compare_digest(_h(body.otp.strip(), v.id), v.otp_hash or ""):
-        ctx.db.commit()
-        raise HTTPException(400, f"That code is not right. {5 - v.otp_attempts} attempt(s) left.")
-    v.otp_verified = True
-    v.waiting_minutes = int((utcnow() - v.started_at).total_seconds() // 60)
+    data = _clean(body.model_dump())
+    if v.customer_id and not v.ended_at:
+        _update_customer(ctx, ctx.db.get(Customer, v.customer_id), data, v, bg, log=False)
+    v.prospect = {**(v.prospect or {}), **data}
     ctx.db.commit()
     return to_dict(v)
 
 
+def _update_customer(ctx: Ctx, cust: Customer, data: dict, v: Visit, bg, log=True):
+    changed = []
+    for k in ("phone", "email", "address", "city"):
+        val = data.get(k)
+        if val and getattr(cust, k) != val:
+            setattr(cust, k, val[:400])
+            changed.append(k)
+    if "phone" in changed:
+        cust.phone_key = svc.phone_key(cust.phone)
+    if log:
+        pr = ctx.db.get(Product, data["product_id"]) if data.get("product_id") else None
+        bits = [f"Field visit by {ctx.user.name}"]
+        if changed:
+            bits.append("updated " + ", ".join(changed))
+        if pr and pr.tenant_id == ctx.tid:
+            bits.append(f"interested in {pr.name}")
+        if v.mom:
+            bits.append(f"summary: {v.mom[:200]}")
+        log_activity(ctx.db, ctx.tid, "customer", cust.id, ctx.user.id, ". ".join(bits))
+    if changed and (ctx.tenant.settings.get("erpnext") or {}).get("enabled"):
+        from ..integrations.erpnext import push_entity_task
+        bg.add_task(push_entity_task, ctx.tid, "customers", cust.id)
+    return changed
+
+
+def _missing(ctx: Ctx, v: Visit, cust: Customer | None, data: dict) -> list[str]:
+    miss = []
+    if cust:
+        if not (cust.name or data.get("name")):
+            miss.append("customer name")
+        has_phone = cust.phone or data.get("phone") or ctx.db.scalar(select(Contact.id).where(Contact.tenant_id == ctx.tid, Contact.customer_id == cust.id, Contact.phone != ""))
+        if not has_phone:
+            miss.append("customer mobile number")
+    else:
+        if not data.get("name"):
+            miss.append("customer name")
+        if not data.get("phone"):
+            miss.append("customer mobile number")
+        if not data.get("product_id"):
+            miss.append("product of interest")
+    return miss
+
+
 class EndIn(BaseModel):
-    mom: str = ""
+    mom: str = ""                       # visit summary (required)
+    customer: CustomerIn | None = None  # customer details (required if not already on record)
     email_to: str = ""
     photo: str | None = None
     lat: float | None = None
@@ -101,21 +138,59 @@ class EndIn(BaseModel):
 
 
 @router.post("/{vid}/end")
-def end(vid: int, body: EndIn, ctx: Ctx = Depends(current)):
+def end(vid: int, body: EndIn, bg: BackgroundTasks, ctx: Ctx = Depends(current)):
+    """Check-out. Needs the customer's details and a visit summary. A new customer becomes a lead; a known one is updated; the visit is recorded either way."""
     v = get_or_404(ctx.db, Visit, vid, ctx.tid)
     if v.user_id != ctx.user.id:
         raise HTTPException(403, "This is not your visit.")
     if v.ended_at:
         raise HTTPException(409, "This visit has already ended.")
-    if ctx.setting("require_visit_otp", True) and not v.otp_verified:
-        raise HTTPException(403, "Verify the customer's OTP before ending the visit.")
+    data = {**(v.prospect or {}), **_clean(body.customer.model_dump() if body.customer else None)}
+    summary = (body.mom or "").strip()
+    cust = ctx.db.get(Customer, v.customer_id) if v.customer_id else None
+    if not cust and svc.phone_key(data.get("phone")):   # a new customer who is already on record: use the record
+        cust = ctx.db.scalar(select(Customer).where(Customer.tenant_id == ctx.tid, Customer.phone_key == svc.phone_key(data["phone"]), Customer.deleted_at.is_(None)))
+    problems = _missing(ctx, v, cust, data)
+    if len(summary) < 5:
+        problems.append("visit summary")
+    if problems:
+        raise HTTPException(422, "Before you check out, please enter: " + ", ".join(problems) + ".")
     from .fieldx import pending_mandatory
     missing = pending_mandatory(ctx.db, ctx.tid, v.id)
     if missing:
         raise HTTPException(422, "Fill in the required form before ending the visit: " + ", ".join(missing))
     if ctx.setting("require_visit_photo", False) and not body.photo:
         raise HTTPException(422, "A photo of the visit is required (proof of visit).")
-    v.ended_at, v.mom = utcnow(), body.mom.strip()
+    pr = ctx.db.get(Product, data["product_id"]) if data.get("product_id") else None
+    if pr and pr.tenant_id != ctx.tid:
+        pr = None
+        data.pop("product_id", None)
+    v.ended_at, v.mom, v.end_lat, v.end_lng = utcnow(), summary, body.lat, body.lng
+    v.prospect = data or None
+    # ---- the customer side: update the known customer, or turn a new customer into a lead (or update the lead already on record)
+    if cust:
+        v.customer_id = cust.id
+        _update_customer(ctx, cust, data, v, bg)
+        v.outcome = f"Updated customer {cust.name}"
+    else:
+        lead = svc.find_duplicate_lead(ctx.db, ctx.tid, data.get("phone", ""), data.get("email", ""))
+        if lead:
+            for k in ("company", "email", "city"):
+                if data.get(k) and not getattr(lead, k):
+                    setattr(lead, k, data[k][:200])
+            if pr and (not lead.product_id or (ctx.db.get(Product, lead.product_id) and ctx.db.get(Product, lead.product_id).code == "UNSPEC")):
+                lead.product_id = pr.id
+            v.outcome = f"Updated existing lead {lead.name}"
+        else:
+            lead, _ = svc.create_lead_core(ctx.db, ctx.tenant, ctx.user, {"name": data["name"], "company": data.get("company", ""), "phone": data["phone"], "email": data.get("email", ""),
+                                                                       "city": data.get("city", ""), "product_id": data.get("product_id"), "notes": f"Captured during a field visit. {summary[:300]}",
+                                                                       "owner_id": ctx.user.id, "temperature": data.get("temperature") or "warm"}, source="Field visit", dedupe="create", actor=ctx.user.name)
+            v.outcome = f"New lead {lead.name}"
+        v.lead_id = lead.id
+        log_activity(ctx.db, ctx.tid, "lead", lead.id, ctx.user.id, f"Field visit by {ctx.user.name} ({int((v.ended_at - v.started_at).total_seconds() // 60)} min): {summary[:300]}")
+        if (ctx.tenant.settings.get("erpnext") or {}).get("enabled"):
+            from ..integrations.erpnext import push_entity_task
+            bg.add_task(push_entity_task, ctx.tid, "leads", lead.id)
     from ..models import BeatVisit
     bv = ctx.db.scalar(select(BeatVisit).where(BeatVisit.tenant_id == ctx.tid, BeatVisit.visit_id == v.id))
     if bv:  # closes the planned beat stop
@@ -123,24 +198,34 @@ def end(vid: int, body: EndIn, ctx: Ctx = Depends(current)):
     if body.photo:
         raw, ext = decode_data_url(body.photo)
         v.photo = save_upload(ctx.tid, raw, ext, watermark_text(ctx.user.name, body.lat, body.lng, ctx.tenant))
-    cust = ctx.db.get(Customer, v.customer_id) if v.customer_id else None
+    name = (cust.name if cust else data.get("name")) or "Visit"
     recipients = [e.strip() for e in (body.email_to or ctx.setting("mom_recipients_default", "")).split(",") if "@" in e]
-    if cust and cust.email and cust.email not in recipients:
-        recipients.append(cust.email)
+    cust_email = (cust.email if cust else data.get("email")) or ""
+    if cust_email and cust_email not in recipients:
+        recipients.append(cust_email)
     if ctx.user.manager_id:
         m = ctx.db.get(User, ctx.user.manager_id)
         if m and m.email not in recipients:
             recipients.append(m.email)
-    if v.mom and recipients:
+    if recipients:
         mins = int((v.ended_at - v.started_at).total_seconds() // 60)
-        subject = f"Minutes of Meeting - {cust.name if cust else 'Visit'} ({ctx.user.name})"
-        text = f"Customer: {cust.name if cust else '-'}\nAttended by: {ctx.user.name}\nDuration: {mins} min\n\n{v.mom}\n\n- {ctx.tenant.name} via Fieldwise"
-        sent = [r for r in recipients if send_email(r, subject, text)]
+        subject = f"Minutes of Meeting - {name} ({ctx.user.name})"
+        text = f"Customer: {name}\nAttended by: {ctx.user.name}\nDuration: {mins} min\n\n{summary}\n\n- {ctx.tenant.name} via Fieldwise"
+        for r in recipients:
+            send_email(r, subject, text)
         v.mom_emailed_to = ",".join(recipients)
-        if ctx.user.manager_id:
-            notify(ctx.db, ctx.tid, ctx.user.manager_id, "MOM submitted", f"{ctx.user.name} - {cust.name if cust else 'visit'}: {v.mom[:120]}", "mom")
+    if ctx.user.manager_id:
+        notify(ctx.db, ctx.tid, ctx.user.manager_id, "Visit completed", f"{ctx.user.name} - {name}: {summary[:120]}", "mom")
     ctx.db.commit()
     return to_dict(v)
+
+
+def _row(ctx: Ctx, v: Visit, cname=None):
+    d = {**to_dict(v), "customer_name": cname}
+    if not cname and v.prospect:
+        d["customer_name"] = v.prospect.get("name")
+    d["is_new_customer"] = v.customer_id is None
+    return d
 
 
 @router.get("/active")
@@ -149,12 +234,23 @@ def active(ctx: Ctx = Depends(current)):
     if not v:
         return None
     c = ctx.db.get(Customer, v.customer_id) if v.customer_id else None
-    return {**to_dict(v), "customer_name": c.name if c else None}
+    out = _row(ctx, v, c.name if c else None)
+    if c:
+        out["customer"] = {"name": c.name, "phone": c.phone, "email": c.email, "city": c.city, "address": c.address}
+    return out
 
 
 @router.get("")
-def list_visits(user_id: int | None = None, ctx: Ctx = Depends(current)):
+def list_visits(user_id: int | None = None, start: str | None = None, end: str | None = None, ctx: Ctx = Depends(current)):
+    """Visits of me / my team, newest first. start and end (YYYY-MM-DD, inclusive) limit the period."""
     ids = ctx.team_ids()
     q = select(Visit, Customer.name, User.name).outerjoin(Customer, Customer.id == Visit.customer_id).join(User, User.id == Visit.user_id).where(
-        Visit.tenant_id == ctx.tid, Visit.user_id.in_([user_id] if user_id in ids else ids)).order_by(Visit.id.desc()).limit(200)
-    return [{**to_dict(v), "customer_name": cn, "user_name": un} for v, cn, un in ctx.db.execute(q)]
+        Visit.tenant_id == ctx.tid, Visit.user_id.in_([user_id] if user_id in ids else ids))
+    if start:
+        q = q.where(Visit.started_at >= local_day_bounds_utc(ctx.tenant, parse_day(start, local_today(ctx.tenant)))[0])
+    if end:
+        q = q.where(Visit.started_at < local_day_bounds_utc(ctx.tenant, parse_day(end, local_today(ctx.tenant)))[1])
+    out = []
+    for v, cn, un in ctx.db.execute(q.order_by(Visit.id.desc()).limit(500)):
+        out.append({**_row(ctx, v, cn), "user_name": un})
+    return out

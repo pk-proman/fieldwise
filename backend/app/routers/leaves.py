@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from ..deps import Ctx, current, require
@@ -132,7 +132,7 @@ class DecideIn(BaseModel):
 
 
 @router.post("/{lid}/decide")
-def decide(lid: int, body: DecideIn, ctx: Ctx = Depends(require("manager"))):
+def decide(lid: int, body: DecideIn, bg: BackgroundTasks, ctx: Ctx = Depends(require("manager"))):
     if body.decision not in ("approved", "rejected"):
         raise HTTPException(422, "Decision must be approved or rejected.")
     r = get_or_404(ctx.db, LeaveRequest, lid, ctx.tid)
@@ -153,6 +153,9 @@ def decide(lid: int, body: DecideIn, ctx: Ctx = Depends(require("manager"))):
             d += timedelta(days=1)
     notify(ctx.db, ctx.tid, r.user_id, f"Leave {body.decision}", f"{r.from_day} to {r.to_day}. {body.note}", "approval")
     ctx.db.commit()
+    if body.decision == "approved" and (ctx.tenant.settings.get("erpnext") or {}).get("enabled"):
+        from ..integrations.erpnext import push_leave_task
+        bg.add_task(push_leave_task, ctx.tid, [r.id])   # write back to ERPNext (retried hourly if it fails)
     return to_dict(r)
 
 

@@ -148,13 +148,20 @@ const FIELD = [
     ],
     flow: ["If tracking stops", ["No location for 12 min", "Phone shows “Route stopped, tap to resume”", "You tap it", "+Tracking resumes", ], "The manager is also alerted, with the likely reason (for example “Battery optimisation is on”). After a phone restart you get the same tap-to-resume notice."],
     tip: "Sitting still in a meeting is fine. The app sends a heartbeat every 2 minutes, so you do not look “lost”." },
-  { id: "f-visits", title: "Customer visits", what: "Records that you really met the customer: you start the visit at their location, the customer confirms with a code (OTP), and you finish with minutes of the meeting (MOM) that are emailed automatically.",
+  { id: "f-visits", title: "Customer visits", what: "Check in when you reach the customer. Your location is recorded and the visit becomes <b>active</b>. Pick the customer, or type a new one. When you check out you enter the customer's details and a visit summary. A new customer becomes a lead automatically; a known customer's record is updated. No OTP.",
     steps: [
-      { t: "Customer visits", rows: ["s:Today", "l:ABC Constructions|Pune", "*b:+ Start visit"], cap: "Open <b>Visits</b>, tap <b>Start visit</b>, pick the customer" },
-      { t: "Verify", rows: ["w:Waiting for customer OTP", "i:6-digit code", "*b:Verify"], cap: "Ask the customer for the OTP sent to their phone" },
-      { t: "Visit in progress", rows: ["c:OTP verified", "i:Minutes of meeting", "i:Add photo", "*b:End visit & send MOM"], cap: "Type the key points, add a photo, <b>End visit</b>" },
+      { t: "Customer visits", rows: ["*b:+ Check in at a customer", "l:Sharma Traders|Today 10:15 · 42 min"], cap: "Open <b>Visits</b>, tap <b>Check in at a customer</b>" },
+      { t: "Check in", rows: ["a:Existing customer", "a:New customer", "i:Search a customer", "i:Name, mobile, product", "*b:Check in here"], cap: "Choose an existing customer, or <b>New customer</b> and type the name. Tap <b>Check in here</b>" },
+      { t: "Visit active", rows: ["c:ACTIVE since 10:15", "i:Mobile number", "i:Product of interest", "i:Visit summary", "*r:Check out"], cap: "Fill the details now or later. You cannot check out without them and the summary" },
+      { t: "Checked out", rows: ["c:New lead: Ravi Steel", "t:Summary emailed to manager"], cap: "A new customer is added as a lead; a known one is updated" },
     ],
-    flow: ["Visit flow", ["Start visit at the site", "?Are you at the customer's location?", "Customer gets an OTP", "Enter the OTP", "Meeting, then write MOM", "+MOM emailed to customer and manager"], "If your admin turned OTP or photo off, those steps are skipped."] },
+    flow: ["Visit flow", ["Reach the customer", "Check in|location recorded, visit ACTIVE", "Pick or type the customer", "Meet, add details as you go", "Check out|customer data + summary required", "?New customer?", "+Added as a lead", "+Existing customer updated"], "Needed to check out: customer name, mobile number, product of interest (for a new customer) and a visit summary. If the mobile number already belongs to a customer or lead, that record is updated instead of creating a duplicate. If your admin made a form compulsory, fill it before checking out."] },
+  { id: "f-travel", title: "My travel: distance, visits and expenses for a period", what: "See, for this month, last month or any dates, how far you travelled, every visit you made, your route for each day, and what the expense rules work out. Tap a day for the map and that day's visits.",
+    steps: [
+      { t: "My travel", rows: ["i:This month ▾", "c:412 km · 38 visits", "t:Rules give ₹2,472", "l:10 Nov|42 km · 3 visits", "*l:11 Nov|38 km · 4 visits"], cap: "Open <b>My travel</b> and choose a period" },
+      { t: "11 Nov", rows: ["m", "t:38 km tracked · quality 92%", "l:Sharma Traders|35 min", "l:Ravi Steel|20 min"], cap: "Tap a day: route map, visits and the amount" },
+    ],
+    tip: "The calculated amount is a preview until your company switches automatic expenses on. Claim your expenses in <b>Expenses</b>." },
   { id: "f-tasks", title: "Tasks and meetings", what: "Tasks are your to-do list (yours or ones your manager assigns). Meetings are scheduled customer or team meetings with a reminder.",
     steps: [
       { t: "Tasks", rows: ["*b:+ New task", "l:Call Mr Rao|Due today", "l:Send quote|Tomorrow"], cap: "<b>Tasks</b>, then <b>+ New task</b>" },
@@ -169,7 +176,7 @@ const FIELD = [
       { t: "Beat plans", rows: ["l:Pune North|8 stops", "l:Pune East|6 stops", "*b:+ New beat"], cap: "Managers create beats and assign them, and see who kept to plan" },
     ],
     flow: ["Beat day", ["Manager sets the beat", "You see today's stops", "Visit each stop|start a visit", "+Coverage shows in the manager's report"]] },
-  { id: "f-leave", title: "Leave and expenses", what: "Apply for leave, or claim travel and other costs. Your manager approves or rejects, and you see the status.",
+  { id: "f-leave", title: "Leave and expenses", what: "Apply for leave, or claim travel and other costs. Your manager approves or rejects, and you see the status. Once approved, your leave and expense claim are also written to the company's ERPNext, and the list shows the ERPNext number.",
     steps: [
       { t: "Leaves", rows: ["t:Balance: 8 days", "*b:Apply for leave"], cap: "<b>Leaves</b>, then <b>Apply for leave</b>" },
       { t: "New claim", rows: ["i:Category", "i:Amount", "i:Photo of bill", "*b:Save"], cap: "<b>Expenses</b>, then <b>+ New claim</b>. Add a bill photo" },
@@ -239,7 +246,7 @@ const MGR = [
       { t: "Anywhere", rows: ["i:Whole team ▾", "l:Ravi's team", "l:Meena's team", "*a:Ravi's team"], cap: "Pickers and reports list your team. Choose a person to see their branch" },
     ],
     flow: ["How visibility works", ["MD", "Regional manager", "Team lead", "Field employee", "+You see yourself and everyone below you"], "If a manager is disabled, their direct reports move up to the manager's manager, so nobody is left without one."] },
-  { id: "m-live", title: "Live team and Phone health", what: "The <b>Live team</b> map shows who is on duty now. <b>Phone health</b> shows whose phone settings could stop tracking, and why a person has gone silent.", who: ["mgr"],
+  { id: "m-live", title: "Live team and Phone health", what: "On the web, or on your phone if your admin gave you a manager PIN: the <b>Live team</b> map shows who is on duty now, with <b>Past days</b> for earlier days. <b>Phone health</b> shows whose phone settings could stop tracking, and why a person has gone silent.", who: ["mgr"],
     steps: [
       { t: "Live team", rows: ["m", "l:Asha K.|2 min ago · 74%", "l:Ravi S.|GPS off"], cap: "Open <b>Live team</b>: green is live, grey is offline" },
       { t: "Phone health", rows: ["x:Ravi S.: battery limit", "c:Asha K.: all good", "*a:Phone health"], cap: "Open <b>Phone health</b> to see the likely reason" },
@@ -302,7 +309,7 @@ const part = (id, title, lead, items) => `<section class="part" id="${id}"><h2>$
 const pick = (arr, ids) => ids.map(i => arr.find(f => f.id === i));
 document.getElementById("app").innerHTML =
   part("start", "Get started", "Do this once on your phone.", START) +
-  part("employee", "Employee: your day in the field", "For the field team, in the phone app. Check in, visit customers, claim expenses.", pick(FIELD, ["f-attendance", "f-track", "f-visits", "f-tasks", "f-beat", "f-leave"])) +
+  part("employee", "Employee: your day in the field", "For the field team, in the phone app. Check in, visit customers, claim expenses.", pick(FIELD, ["f-attendance", "f-track", "f-visits", "f-travel", "f-tasks", "f-beat", "f-leave"])) +
   part("manager", "Manager: your team", "On the web. See your team, their routes and approvals.", [...MGR, ...pick(FIELD, ["f-people"])]) +
   part("admin", "Admin: set up and run", "On the web. Add people, give out the app, set expense rules.", ADM) +
   part("crm", "CRM", "Leads, customers, quotes and money, from first enquiry to payment collected. Used by employees and managers alike.", CRM) +

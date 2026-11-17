@@ -97,7 +97,7 @@ async function phoneHealth() {
 // ----------------------------------------------------------------- Live team
 const PALETTE = ["#175cd3", "#d92d20", "#067647", "#b54708", "#7a2fd4", "#0e9384", "#c11574", "#4d5565"];
 export async function team(root, S) {
-  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
+  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label><a class="btn sm" href="#/routehist">Past days</a>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
     <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr)"><div class="card" style="padding:8px"><div id="map" class="map tall"></div></div><div class="card"><h2>Team</h2><div id="list" class="live-list">${skeleton(4)}</div><div id="detail" style="margin-top:12px"></div></div></div>`;
   $("#phh") && ($("#phh").onclick = phoneHealth);
   const map = makeMap($("#map"), S.tenant.settings.map_style, [20.5, 78.9], 5), markers = {}, lines = {}, extra = L.layerGroup().addTo(map || L.layerGroup()); let people = {}, routes = {}, selected = null, fitted = false;

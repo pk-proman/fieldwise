@@ -19,6 +19,8 @@ import * as fld from "./pages-field.js";
 import * as setup from "./pages-setup.js";
 import * as plat from "./pages-platform.js";
 import * as rh from "./pages-routehist.js";
+import * as vis from "./pages-visits.js";
+import * as mt from "./pages-mytravel.js";
 
 export const S = { user: null, tenant: null, cleanup: null, kind: "client", setupPending: false, imp: false, pub: { signup_enabled: true } };
 const ROLE = { employee: 1, manager: 2, admin: 3, owner: 4 };
@@ -44,7 +46,8 @@ const ROUTES = [
   { p: "tasks", t: "Tasks", i: "check", f: crm.tasks },
   { p: "beats", t: "Beat plan", i: "route", f: bt.beats },
   { p: "meetings", t: "Meetings", i: "handshake", f: sales.meetings },
-  { p: "visits", t: "Visits", i: "pin", f: crm.visits },
+  { p: "visits", t: "Visits", i: "pin", f: vis.visits },
+  { p: "mytravel", t: "My travel", i: "route", f: mt.mytravel },
   { p: "routes", t: "Routes", i: "route", f: crm.routes },
   { p: "routehist", t: "Route history", i: "route", f: rh.routehist },
   { p: "workhours", t: "Work hours", i: "clock", f: fld.workhours },
@@ -67,10 +70,10 @@ const ROUTES = [
 ];
 const MOBILE = ["dashboard", "attendance", "tasks", "leads", "more"];
 // A phone activated with a field-only PIN gets just the day-to-day screens; setup, admin and team tools exist only on the web (or with a manager PIN).
-const FIELD_ROUTES = ["attendance", "visits", "tasks", "beats", "leads", "followups", "expenses", "leaves", "announcements"];
+const FIELD_ROUTES = ["attendance", "visits", "mytravel", "tasks", "beats", "leads", "followups", "expenses", "leaves", "announcements"];
 const FIELD_NAMES = { attendance: "Check-in" };
 // Which module switches a page on. A page that is not listed is always available.
-const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", routehist: "field_force", workhours: "field_force",
+const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", routehist: "field_force", mytravel: "field_force", workhours: "field_force",
   leads: "crm", followups: "crm", customers: "crm", contacts: "crm", notes: "crm", renewals: "crm", events: "crm", products: "crm", orders: "sales_docs", invoices: "sales_docs", collections: "sales_docs",
   roster: "people", leaves: "people", expenses: "people", incentives: "people", vendors: "purchase_support", purchase: "purchase_support", dealers: "purchase_support", helpdesk: "purchase_support", calls: "calls", dialer: "calls" };
 const PLATFORM_ROUTES = [{ p: "clients", t: "Clients", i: "building", f: plat.clients }, { p: "padmins", t: "Platform admins", i: "users", f: plat.admins }];
@@ -82,13 +85,14 @@ function navView() {
   if (S.appScope === "field") {
     const routes = ROUTES.filter(r => FIELD_ROUTES.includes(r.p)).map(r => ({ ...r, t: FIELD_NAMES[r.p] || r.t, min: undefined }));
     routes.sort((a, b) => FIELD_ROUTES.indexOf(a.p) - FIELD_ROUTES.indexOf(b.p));
-    return { routes, mobile: ["attendance", "visits", "tasks", "expenses", "more"] };
+    return { routes, mobile: ["attendance", "visits", "mytravel", "expenses", "more"] };
   }
   const mods = S.tenant?.settings?.modules || {};
   const on = r => !ROUTE_MODULE[r.p] || mods[ROUTE_MODULE[r.p]] !== false;
   const kept = ROUTES.filter(r => r.sec || on(r));
   const routes = kept.filter((r, i) => !r.sec || (kept[i + 1] && !kept[i + 1].sec));
-  return { routes, mobile: MOBILE.filter(p => p === "more" || routes.some(r => r.p === p)) };
+  const mgrPhone = ["manager", "admin", "owner"].includes(S.user.role) && S.appScope === "manager";   // a manager's phone gets the team map in the bottom bar
+  return { routes, mobile: (mgrPhone ? ["attendance", "team", "visits", "expenses", "more"] : MOBILE).filter(p => p === "more" || routes.some(r => r.p === p)) };
 }
 const allowed = r => !r.min || ROLE[S.user.role] >= ROLE[r.min];
 

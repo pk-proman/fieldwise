@@ -125,17 +125,17 @@ def test_forms_da_levels_announcements_schedules(client):
     assert [q["key"] for q in f["fields"]][:2] == ["competitor_present", "shelf_share"]
     client.put("/api/settings", headers=h, json={"require_visit_otp": False})
     v = client.post("/api/visits/start", headers=eh, json={"customer_id": cust["id"], "lat": 19.1137, "lng": 72.8698}).json()["visit"]
-    blocked = client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "ok"})
+    blocked = client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "Visit went well"})
     assert blocked.status_code == 422 and "Site audit" in blocked.json()["detail"]
     assert client.post(f"/api/forms/{f['id']}/responses", headers=eh, json={"visit_id": v["id"], "data": {"shelf_share": "x", "condition": "Good"}}).status_code == 422
     assert client.post(f"/api/forms/{f['id']}/responses", headers=eh, json={"visit_id": v["id"], "data": {"shelf_share": 35, "condition": "Excellent"}}).status_code == 422
     ok = client.post(f"/api/forms/{f['id']}/responses", headers=eh, json={"visit_id": v["id"], "customer_id": cust["id"], "data": {"shelf_share": 35, "condition": "Poor", "rating": 4, "competitor_present": True}})
     assert ok.status_code == 200
     client.put("/api/settings", headers=h, json={"require_visit_photo": True})
-    assert client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "ok"}).status_code == 422                # proof-of-visit photo
+    assert client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "Visit went well"}).status_code == 422                # proof-of-visit photo
     import base64
     img = "data:image/png;base64," + base64.b64encode(bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6360000002000001e221bc330000000049454e44ae426082")).decode()
-    assert client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "ok", "photo": img}).status_code == 200
+    assert client.post(f"/api/visits/{v['id']}/end", headers=eh, json={"mom": "Visit went well", "photo": img}).status_code == 200
     assert "Poor" in client.get("/api/forms/responses", headers=mh, params={"template_id": f["id"], "fmt": "csv"}).text
     # --- DA by tier + approval levels
     assert client.post("/api/expenses/da-auto", headers=eh, json={}).status_code == 422                                   # not enabled

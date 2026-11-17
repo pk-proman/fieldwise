@@ -19,7 +19,7 @@ DEFAULT_SETTINGS = {
     "currency": "INR", "timezone": "Asia/Kolkata", "work_start": "09:30", "work_end": "18:30", "late_grace_min": 15,
     "weekly_off": [6], "fuel_rate_per_km": 6.0, "fuel_daily_cap": 800.0, "geofence_default_m": 150,
     "enforce_geofence": True, "checkout_geofence": True, "block_mock_location": True, "require_face": False,
-    "require_visit_otp": True, "map_style": "streets", "labels": {"check_in": "Check In", "check_out": "Check Out"},
+    "require_visit_otp": False, "map_style": "streets", "labels": {"check_in": "Check In", "check_out": "Check Out"},
     "task_statuses": ["open", "in_progress", "done"], "waiting_alert_min": 20, "gps_off_alert_min": 15,
     "mom_recipients_default": "", "page_headers": {}, "discount_approval_pct": 10, "qualify_min_score": 5, "auto_followup_days": 1, "dcr_digest": True,
 }

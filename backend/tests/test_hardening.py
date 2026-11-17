@@ -221,15 +221,9 @@ def test_production_refuses_default_secret():
     assert ok.returncode == 0 and "fine" in ok.stdout
 
 
-def test_production_never_reveals_visit_otp(client, monkeypatch):
-    from app import config
+def test_visit_checkin_needs_no_otp(client):
     ws, h = signup(client, "Otp Co", "o@otp.com")
     cust = client.post("/api/crm/customers", headers=h, json={"name": "Cust", "phone": "+919333312345"}).json()
-    dev = client.post("/api/visits/start", headers=h, json={"customer_id": cust["id"]}).json()
-    assert dev["otp_required"] and "dev_otp" in dev                   # development: shown so the flow can be tried
-    client.post(f"/api/visits/{dev['visit']['id']}/verify-otp", headers=h, json={"otp": dev["dev_otp"]})
-    client.post(f"/api/visits/{dev['visit']['id']}/end", headers=h, json={"mom": "ok"})
-    monkeypatch.setattr(config, "ENV", "production")
-    r = client.post("/api/visits/start", headers=h, json={"customer_id": cust["id"]})
-    assert r.status_code == 503 and "SMS gateway" in r.json()["detail"] and "dev_otp" not in r.text
-    assert client.get("/api/visits/active", headers=h).json() is None   # the half-created visit was not kept
+    r = client.post("/api/visits/start", headers=h, json={"customer_id": cust["id"], "lat": 19.1, "lng": 72.8}).json()
+    assert r["otp_required"] is False and "dev_otp" not in r
+    assert client.post(f"/api/visits/{r['visit']['id']}/end", headers=h, json={"mom": "Visit summary here"}).status_code == 200

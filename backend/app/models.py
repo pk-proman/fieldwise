@@ -172,6 +172,8 @@ class LeaveRequest(TenantMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected|cancelled
     approver_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     decision_note: Mapped[str] = mapped_column(String(300), default="")
+    erp_ref: Mapped[str] = mapped_column(String(100), default="")     # the Leave Application in ERPNext, once written back
+    erp_error: Mapped[str] = mapped_column(String(300), default="")  # why the last write-back failed (retried hourly)
 
 
 class RouteDay(TenantMixin, Base):
@@ -214,6 +216,7 @@ class ExpenseClaim(TenantMixin, Base):
     levels_required: Mapped[int] = mapped_column(Integer, default=1)
     approvals: Mapped[list] = mapped_column(JSON, default=list)  # [{by, name, at, note}]
     source: Mapped[str] = mapped_column(String(10), default="manual")   # manual | auto (computed from the day's route and the expense rules)
+    erp_error: Mapped[str] = mapped_column(String(300), default="")    # why the last write-back to ERPNext failed (retried hourly)
 
 
 class Customer(TenantMixin, Base):
@@ -367,6 +370,12 @@ class Visit(TenantMixin, Base):
     mom_emailed_to: Mapped[str] = mapped_column(String(300), default="")
     photo: Mapped[str | None] = mapped_column(String(300), nullable=True)
     waiting_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    lead_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)       # the lead this visit created or updated (new customer)
+    prospect: Mapped[dict | None] = mapped_column(JSON, nullable=True)                    # customer details captured during the visit: name, phone, email, company, city, product_id, notes
+    start_dist_m: Mapped[float | None] = mapped_column(Float, nullable=True)              # how far from the customer's saved location the check-in was (recorded, not blocked)
+    end_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    end_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outcome: Mapped[str] = mapped_column(String(300), default="")                         # what happened to the customer record: "New lead #12", "Updated customer"
 
 
 class Activity(TenantMixin, Base):

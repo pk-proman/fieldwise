@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "1.3.0",
+  "versionCode": 6,
+  "versionName": "1.4.0",
   "minVersionCode": 1,
-  "releaseNotes": "Activate your phone once with the PIN from your administrator: no daily sign-in\nOpens straight on a large Check-in / Check-out button\nField-only app: setup and admin tools stay on the web\nCleaner route distance for travel claims"
+  "releaseNotes": "Customer visits: check in at the customer, no OTP; check out with the customer's details and a summary\nNew customers become leads automatically\nNew My travel screen: distance, visits and day-wise routes for any period\nLeave and expense claims are written to ERPNext\nManagers: team map and past days on a manager PIN phone"
 }

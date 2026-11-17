@@ -148,7 +148,7 @@ def test_crm_flow_recycle_custom_fields_ocr(client):
     assert client.get(f"/api/crm/leads/{lid}", headers=h).json()["custom"]["budget_code"] == "B1"
 
 
-def test_tasks_geofence_repeat_visits_otp_routes(client):
+def test_tasks_geofence_repeat_visits_routes(client):
     ws, h = signup(client, "Eta Co", "o@eta.com")
     cust = client.post("/api/crm/customers", headers=h, json={"name": "Site A", "phone": "+919811111111", "lat": 19.10, "lng": 72.85}).json()
     c2 = client.post("/api/crm/customers", headers=h, json={"name": "Site B", "lat": 19.20, "lng": 72.95}).json()
@@ -162,12 +162,10 @@ def test_tasks_geofence_repeat_visits_otp_routes(client):
     assert any(x["title"] == "Deliver samples" for x in open_tasks)  # repeat spawned next
     up = client.post("/api/tasks/bulk-upload", headers=h, files={"file": ("t.csv", b"title,priority,due\nA,high,2030-01-01\n,low,\nB,weird,\n", "text/csv")}).json()
     assert up["created"] == 1 and len(up["errors"]) == 2
-    # visit OTP
+    # visit: check-in records the location, no OTP
     v = client.post("/api/visits/start", headers=h, json={"customer_id": cust["id"], "lat": 19.10, "lng": 72.85}).json()
-    assert v["otp_required"] and "dev_otp" in v
-    assert client.post(f"/api/visits/{v['visit']['id']}/end", headers=h, json={"mom": "x"}).status_code == 403
-    assert client.post(f"/api/visits/{v['visit']['id']}/verify-otp", headers=h, json={"otp": "000000"}).status_code == 400
-    assert client.post(f"/api/visits/{v['visit']['id']}/verify-otp", headers=h, json={"otp": v["dev_otp"]}).json()["otp_verified"]
+    assert v["otp_required"] is False and v["distance_m"] == 0
+    assert client.post(f"/api/visits/{v['visit']['id']}/end", headers=h, json={"mom": "x"}).status_code == 422   # a real summary is required
     end = client.post(f"/api/visits/{v['visit']['id']}/end", headers=h, json={"mom": "Agreed on pricing.", "email_to": "boss@x.com"})
     assert end.status_code == 200 and "boss@x.com" in end.json()["mom_emailed_to"]
     # route optimisation: A(19.10,72.85) -> C(19.11,72.86) -> B(19.2,72.95)
@@ -389,10 +387,9 @@ def test_beat_plan_lifecycle(client):
     # execute stop 1 with OTP, skip stop 2 (reason required)
     s1, s2 = client.get("/api/beats/day", headers=eh).json()["stops"][:2]
     st = client.post(f"/api/beats/visits/{s1['id']}/start", headers=eh, json={"lat": 19.30, "lng": 72.85}).json()
-    assert st["otp_required"]
+    assert st["otp_required"] is False
     vid = st["visit"]["id"]
-    client.post(f"/api/visits/{vid}/verify-otp", headers=eh, json={"otp": st["dev_otp"]})
-    assert client.post(f"/api/visits/{vid}/end", headers=eh, json={"mom": "Order discussed"}).status_code == 200
+    assert client.post(f"/api/visits/{vid}/end", headers=eh, json={"mom": "Order discussed", "customer": {"phone": "9822211111"}}).status_code == 200
     assert client.post(f"/api/beats/visits/{s2['id']}/skip", headers=eh, json={"reason": "x"}).status_code == 422
     assert client.post(f"/api/beats/visits/{s2['id']}/skip", headers=eh, json={"reason": "Shop closed today"}).status_code == 200
     assert client.post(f"/api/beats/visits/{s1['id']}/start", headers=eh, json={}).status_code == 409  # already visited

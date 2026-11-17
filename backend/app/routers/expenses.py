@@ -130,6 +130,60 @@ def put_policy(body: PolicyIn, ctx: Ctx = Depends(require("admin"))):
     return get_policy(ctx)
 
 
+@router.get("/period")
+def period(start: str | None = None, end: str | None = None, user_id: int | None = None, ctx: Ctx = Depends(current)):
+    """Travel and expenses for a period, day by day: distance, visits, what the rules compute and what is already claimed. Defaults to my current month."""
+    from datetime import timedelta
+    from ..models import RouteDay, Visit, Customer
+    from .. import routeday
+    from ..common import tz_of
+    uid = user_id or ctx.user.id
+    if uid not in ctx.team_ids():
+        raise HTTPException(403, "You can only view your own team.")
+    today = local_today(ctx.tenant)
+    d1 = parse_day(start, today.replace(day=1))
+    d2 = parse_day(end, today)
+    if d2 < d1 or (d2 - d1).days > 92:
+        raise HTTPException(422, "Choose a period of at most 3 months.")
+    user = ctx.db.get(User, uid)
+    from ..common import local_day_bounds_utc
+    s0, e0 = local_day_bounds_utc(ctx.tenant, d1)[0], local_day_bounds_utc(ctx.tenant, d2)[1]
+    rds = {r.day: r for r in ctx.db.scalars(select(RouteDay).where(RouteDay.tenant_id == ctx.tid, RouteDay.user_id == uid, RouteDay.day >= d1, RouteDay.day <= d2))}
+    from ..models import LocationPing
+    ping_days = set()
+    tz = tz_of(ctx.tenant)
+    for (ts,) in ctx.db.execute(select(LocationPing.ts).where(LocationPing.tenant_id == ctx.tid, LocationPing.user_id == uid, LocationPing.ts >= s0, LocationPing.ts < e0, LocationPing.lat.is_not(None))):
+        ping_days.add(ts.replace(tzinfo=__import__("datetime").timezone.utc).astimezone(tz).date())
+    for d in sorted(ping_days - set(rds)):          # days with points but no summary yet (today, or the nightly job has not run)
+        rd = routeday.build(ctx.db, ctx.tenant, uid, d)
+        if rd:
+            rds[d] = rd
+    visits = ctx.db.execute(select(Visit, Customer.name).outerjoin(Customer, Customer.id == Visit.customer_id).where(
+        Visit.tenant_id == ctx.tid, Visit.user_id == uid, Visit.started_at >= s0, Visit.started_at < e0)).all()
+    vday: dict = {}
+    for v, cn in visits:
+        dd = v.started_at.replace(tzinfo=__import__("datetime").timezone.utc).astimezone(tz).date()
+        vday.setdefault(dd, []).append({"id": v.id, "customer": cn or (v.prospect or {}).get("name"), "minutes": int(((v.ended_at or v.started_at) - v.started_at).total_seconds() // 60), "done": bool(v.ended_at), "outcome": v.outcome})
+    claims: dict = {}
+    for c in ctx.db.scalars(select(ExpenseClaim).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == uid, ExpenseClaim.day >= d1, ExpenseClaim.day <= d2,
+                                                        ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None))):
+        claims[c.day] = claims.get(c.day, 0) + c.amount
+    atts = {a.day: a for a in ctx.db.scalars(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == uid, Attendance.day >= d1, Attendance.day <= d2))}
+    days, d = [], d1
+    while d <= d2:
+        rd, vs = rds.get(d), vday.get(d, [])
+        if rd or vs or d in claims:
+            calc = routeday.compute_expense(ctx.tenant, user, rd, atts.get(d)) if rd else None
+            days.append({"day": d.isoformat(), "km": rd.distance_km if rd else 0, "est_km": rd.est_km if rd else 0, "quality": rd.quality if rd else None, "visits": vs,
+                         "calc": calc, "claimed": round(claims.get(d, 0), 2)})
+        d += timedelta(days=1)
+    mode = routeday.policy_for(ctx.tenant, user)["mode"]
+    tot = {"km": round(sum(x["km"] for x in days), 1), "est_km": round(sum(x["est_km"] for x in days), 1), "visits": sum(len(x["visits"]) for x in days), "days": len([x for x in days if x["km"] or x["visits"]]),
+           "calculated": round(sum((x["calc"] or {}).get("total", 0) for x in days), 2), "claimed": round(sum(x["claimed"] for x in days), 2)}
+    ctx.db.commit()
+    return {"user": {"id": user.id, "name": user.name}, "start": d1.isoformat(), "end": d2.isoformat(), "mode": mode, "currency": ctx.setting("currency", "INR"), "totals": tot, "days": days}
+
+
 @router.get("/auto-preview")
 def auto_preview(day: str | None = None, ctx: Ctx = Depends(current)):
     """What the expense rules computed from my route for a day (shown to me in shadow mode too, so I can compare with my own records)."""
