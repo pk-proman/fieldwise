@@ -25,8 +25,8 @@ DEFAULT_SETTINGS = {
 }
 
 
-DEFAULT_POLICY = ("While you are checked in for work, this app records your location at intervals, your battery level and network status, to verify attendance and visits, calculate distance travelled and keep you safe. "
-                  "It stops recording when you check out. Your manager and the administrators of your company can see this data. Records are kept for the period your company has set and can be exported or erased on request. "
+DEFAULT_POLICY = ("While you are logged in for work, this app records your location at intervals, your battery level and network status, to verify attendance and visits, calculate distance travelled and keep you safe. "
+                  "It stops recording when you log out. Your manager and the administrators of your company can see this data. Records are kept for the period your company has set and can be exported or erased on request. "
                   "You can ask your administrator about how your data is used.")
 
 

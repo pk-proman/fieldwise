@@ -253,9 +253,9 @@ def anomalies(frm: str | None = None, to: str | None = None, ctx: Ctx = Depends(
         if att.flagged:
             out.append({"user": u.name, "user_id": u.id, "day": att.day.isoformat(), "type": "attendance_flag", "detail": att.flagged})
         if att.check_in_at and not att.check_out_at and att.day < today:
-            out.append({"user": u.name, "user_id": u.id, "day": att.day.isoformat(), "type": "no_checkout", "detail": "Never checked out"})
+            out.append({"user": u.name, "user_id": u.id, "day": att.day.isoformat(), "type": "no_checkout", "detail": "Never logged out"})
         if x["points"] == 0 and att.check_in_at:
-            out.append({"user": u.name, "user_id": u.id, "day": att.day.isoformat(), "type": "no_tracking", "detail": "Checked in but no GPS data was recorded"})
+            out.append({"user": u.name, "user_id": u.id, "day": att.day.isoformat(), "type": "no_tracking", "detail": "Logged in but no GPS data was recorded"})
     out.sort(key=lambda r: (r["day"], r["user"]), reverse=True)
     return out
 

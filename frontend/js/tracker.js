@@ -1,4 +1,4 @@
-// Background-ish GPS tracking while checked in (browser/PWA). Sends a breadcrumb every ~45 s,
+// Background-ish GPS tracking while logged in (browser/PWA). Sends a breadcrumb every ~45 s,
 // stores it offline when the network is down, and flushes on reconnect. Native (Capacitor) builds
 // would use a background-geolocation plugin and a native mock-location flag instead of the heuristic below.
 import { queue, post } from "./api.js";

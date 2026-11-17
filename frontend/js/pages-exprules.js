@@ -12,7 +12,7 @@ export async function exprules(pane, S) {
     ...desg.map(d => ["by_designation", d.id, "Designation: " + d.name])];
   const val = (g, id, k) => g === "default" ? pol.default[k] : pol[g]?.[id]?.[k];
   pane.innerHTML = `<div class="card"><h2>Expense rules</h2>
-    <p class="muted small">Each day, after check-out, the app measures the person's tracked route and applies these rules. Start in <b>Shadow</b>: amounts are calculated and shown to managers, but no claim is created and nobody is paid from them. When the numbers match what people actually travelled, switch to <b>On</b>.</p>
+    <p class="muted small">Each day, after log-out, the app measures the person's tracked route and applies these rules. Start in <b>Shadow</b>: amounts are calculated and shown to managers, but no claim is created and nobody is paid from them. When the numbers match what people actually travelled, switch to <b>On</b>.</p>
     <label class="f"><span>Mode</span><select id="xp-mode"><option value="off">Off: people claim by hand</option><option value="shadow">Shadow: calculate and show only</option><option value="on">On: create claims automatically for approval</option></select></label>
     <label class="f"><span><input type="checkbox" id="xp-est"> Also pay for stretches where the phone was silent (estimated distance)</span></label>
     <div class="tablewrap"><table class="stack"><thead><tr><th>Rule</th>${cols.map(c => `<th>${esc(c[2])}</th>`).join("")}</tr></thead><tbody>

@@ -105,7 +105,7 @@ def check_in(body: PunchIn, ctx: Ctx = Depends(current)):
     day = when.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz_of(ctx.tenant)).date()
     row = _today_row(ctx, day)
     if row and row.check_in_at and not row.check_out_at:
-        raise HTTPException(409, "You are already checked in.")
+        raise HTTPException(409, "You are already logged in.")
     if row and row.check_out_at:
         raise HTTPException(409, "You already completed attendance for today.")
     selfie = _verify_identity(ctx, body)
@@ -133,7 +133,7 @@ def check_out(body: PunchIn, ctx: Ctx = Depends(current)):
                                                  Attendance.check_in_at.is_not(None), Attendance.check_out_at.is_(None),
                                                  Attendance.deleted_at.is_(None)).order_by(Attendance.check_in_at.desc()))
     if not row:
-        raise HTTPException(409, "You are not checked in.")
+        raise HTTPException(409, "You are not logged in.")
     _verify_identity(ctx, body)
     _, _, flags = _check_location(ctx, body, "check out")
     row.check_out_at, row.check_out_lat, row.check_out_lng = when, body.lat, body.lng

@@ -71,7 +71,7 @@ const ROUTES = [
 const MOBILE = ["dashboard", "attendance", "tasks", "leads", "more"];
 // A phone activated with a field-only PIN gets just the day-to-day screens; setup, admin and team tools exist only on the web (or with a manager PIN).
 const FIELD_ROUTES = ["attendance", "visits", "mytravel", "tasks", "beats", "leads", "followups", "expenses", "leaves", "announcements"];
-const FIELD_NAMES = { attendance: "Check-in" };
+const FIELD_NAMES = { attendance: "Log-in" };
 // Which module switches a page on. A page that is not listed is always available.
 const ROUTE_MODULE = { attendance: "field_force", team: "field_force", tasks: "field_force", beats: "field_force", meetings: "field_force", visits: "field_force", routes: "field_force", routehist: "field_force", mytravel: "field_force", workhours: "field_force",
   leads: "crm", followups: "crm", customers: "crm", contacts: "crm", notes: "crm", renewals: "crm", events: "crm", products: "crm", orders: "sales_docs", invoices: "sales_docs", collections: "sales_docs",
@@ -163,7 +163,7 @@ async function boot() {
 export function askConsent(policy) {
   if ($("#consent-modal")) return;
   const m = modal({ title: "Before you start: location tracking notice", body: `<div id="consent-modal"><p style="white-space:pre-wrap">${esc(policy)}</p><p class="small muted">You can read this again later in Settings. Your acceptance is recorded with the date.</p></div>`, wide: true,
-    actions: [{ label: "Decline and sign out", danger: true, onClick: async () => { try { await post("/auth/logout"); } catch {} tracker.stop(); session.clear(); S.user = null; authScreen("login"); } }, { label: "I understand and accept", primary: true, onClick: async () => { await post("/auth/consent"); toast("Thank you. You can now check in."); } }] });
+    actions: [{ label: "Decline and sign out", danger: true, onClick: async () => { try { await post("/auth/logout"); } catch {} tracker.stop(); session.clear(); S.user = null; authScreen("login"); } }, { label: "I understand and accept", primary: true, onClick: async () => { await post("/auth/consent"); toast("Thank you. You can now log in."); } }] });
   $("[data-x]", m.root)?.remove();  // can't be dismissed without choosing
 }
 
@@ -259,7 +259,7 @@ function userMenu() {
   const old = $("#pop"); if (old) return old.remove();
   const pop = document.createElement("div"); pop.id = "pop"; pop.className = "card pop"; pop.style.width = "240px";
   pop.innerHTML = `<div style="margin-bottom:8px"><strong>${esc(S.user.name)}</strong><div class="small muted">${esc(S.user.email)} · ${esc(S.user.role)}</div></div>
-   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for check-in</button>${isBundled() ? '<button class="btn" style="width:100%;margin-bottom:6px" id="trk">Tracking setup &amp; health</button>' : ""}${S.appScope ? '<button class="btn" style="width:100%;margin-bottom:6px" id="pc">My mobile number changed</button>' : `<button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`}`;
+   <button class="btn" style="width:100%;margin-bottom:6px" id="th">Toggle dark / light</button><button class="btn" style="width:100%;margin-bottom:6px" id="fe">Enrol face for log-in</button>${isBundled() ? '<button class="btn" style="width:100%;margin-bottom:6px" id="trk">Tracking setup &amp; health</button>' : ""}${S.appScope ? '<button class="btn" style="width:100%;margin-bottom:6px" id="pc">My mobile number changed</button>' : `<button class="btn" style="width:100%;margin-bottom:6px" id="mf">${S.user.mfa_enabled ? "Authenticator: on" : "Turn on authenticator (MFA)"}</button><button class="btn danger" style="width:100%" id="lo">Sign out</button>`}`;
   document.body.appendChild(pop);
   const close = e => { if (!pop.contains(e.target) && e.target.id !== "me") { pop.remove(); document.removeEventListener("mousedown", close); } }; setTimeout(() => document.addEventListener("mousedown", close));
   $("#th", pop).onclick = () => { const r = document.documentElement, dark = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme:dark)").matches); r.dataset.theme = dark ? "light" : "dark"; };

@@ -62,7 +62,7 @@ const STEPS = s => [
   { id: "loc", ok: s.location === "always", title: "Location: Allow all the time", why: "Without ‘all the time’, Android stops recording when the screen is off or the app is closed.",
     btn: s.location === "denied" ? "Allow location" : "Allow all the time", act: () => H().requestLocation(), alt: "Open app settings", altAct: () => H().openSettings({ target: "app" }),
     help: "In the app settings choose Permissions, Location, then Allow all the time (and keep Use precise location on)." },
-  { id: "notif", ok: s.notifications, title: "Notifications allowed", why: "Shows the ‘Tracking on duty’ notice while you are checked in and warns you if tracking stops.",
+  { id: "notif", ok: s.notifications, title: "Notifications allowed", why: "Shows the ‘Tracking on duty’ notice while you are logged in and warns you if tracking stops.",
     btn: "Allow notifications", act: async () => { await H().requestNotifications(); setTimeout(async () => { const n = await status(); if (n && !n.notifications) H().openSettings({ target: "notifications" }); }, 900); } },
   { id: "batt", ok: s.batteryUnrestricted, title: "Battery: Unrestricted", why: "Battery savers kill background apps. Fieldwise uses little battery; this keeps it running all day.",
     btn: "Open battery settings", act: () => H().openSettings({ target: "battery" }), help: "Find Fieldwise in the list and choose Don't optimise / Unrestricted. If you cannot find it: Settings, Apps, Fieldwise, Battery, Unrestricted." },
@@ -74,8 +74,8 @@ const cap = x => x ? x[0].toUpperCase() + x.slice(1) : "";
 
 /** The tracking notice (also Google Play's required "prominent disclosure"): shown before any location permission is requested. */
 function disclosure(onAccept) {
-  const m = modal({ title: "How tracking works", body: `<p><b>Fieldwise records your location, even when the app is closed or the screen is off,</b> from the moment you check in until you check out.</p>
-    <ul><li>Your route is used for attendance, visit verification and travel distance.</li><li>Your manager and administrators can see your live position and route while you are checked in.</li><li>Nothing is recorded after you check out.</li></ul>
+  const m = modal({ title: "How tracking works", body: `<p><b>Fieldwise records your location, even when the app is closed or the screen is off,</b> from the moment you log in until you log out.</p>
+    <ul><li>Your route is used for attendance, visit verification and travel distance.</li><li>Your manager and administrators can see your live position and route while you are logged in.</li><li>Nothing is recorded after you log out.</li></ul>
     <p class="small muted">Your company's privacy notice explains how long this data is kept and who can see it.</p>`,
     actions: [{ label: "Not now", close: true }, { label: "I understand", primary: true, onClick: () => { put(LS.disclosure, new Date().toISOString()); onAccept(); } }] });
   return m;

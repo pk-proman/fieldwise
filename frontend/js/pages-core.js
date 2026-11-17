@@ -4,7 +4,7 @@ import * as tracker from "./tracker.js";
 import { wsBase } from "./config.js";
 import { biometricAvailable, verifyBiometric } from "./native.js";
 
-const label = (S, k, d) => S.tenant.settings?.labels?.[k] || d;
+const label = (S, k, d) => { const v = S.tenant.settings?.labels?.[k]; return !v || /^check[- ]?(in|out)$/i.test(v.trim()) ? d : v; };   // the old default wording ("Check In") now reads Log In
 const header = (S, key, d) => S.tenant.settings?.page_headers?.[key] || d;
 
 // ----------------------------------------------------------------- Dashboard
@@ -33,7 +33,7 @@ export async function dashboard(root, S) {
 
 // ----------------------------------------------------------------- Attendance
 export async function attendance(root, S) {
-  const st = S.tenant.settings, ci = label(S, "check_in", "Check In"), co = label(S, "check_out", "Check Out");
+  const st = S.tenant.settings, ci = label(S, "check_in", "Log In"), co = label(S, "check_out", "Log Out");
   const [today_, branches] = await Promise.all([get("/attendance/today"), get("/branches")]);
   let a = today_.attendance;
   root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "attendance", "Attendance"))}</h1></div>
@@ -49,7 +49,7 @@ export async function attendance(root, S) {
     const btn = $("#punch"), out = a?.check_in_at && !a?.check_out_at, done = a?.check_out_at;
     btn.textContent = done ? "Day complete ✓" : out ? co : ci; btn.disabled = !!done || a?.status === "on_leave"; btn.classList.toggle("danger", !!out); btn.classList.toggle("primary", !out);
     $("#status").innerHTML = a?.status === "on_leave" ? `<h2>On approved leave today</h2>` : !a?.check_in_at ? `<h2>You haven't marked attendance yet</h2><div class="muted">Allow location and tap the button when you reach your site.</div>` :
-      `<h2>${done ? "Worked " + ((new Date(a.check_out_at) - new Date(a.check_in_at)) / 36e5).toFixed(1) + " h · " + a.total_distance_km + " km" : "Checked in at " + fmtT(a.check_in_at)}</h2>
+      `<h2>${done ? "Worked " + ((new Date(a.check_out_at) - new Date(a.check_in_at)) / 36e5).toFixed(1) + " h · " + a.total_distance_km + " km" : "Logged in at " + fmtT(a.check_in_at)}</h2>
       <div>${chip(a.status.replace("_", " "), statusKind(a.status))} ${a.check_in_method ? chip(a.check_in_method) : ""} ${a.flagged ? chip("⚑ " + a.flagged, "warn") : ""}</div>`;
   };
   paint();
@@ -66,7 +66,7 @@ export async function attendance(root, S) {
       if (!navigator.onLine) { body.client_ts = new Date().toISOString().slice(0, 19); queue.addPunch(kind, body); toast("Offline — saved and will sync when you reconnect."); if (kind === "check-in") { a = { check_in_at: new Date().toISOString(), status: "present", check_in_method: "offline" }; tracker.start(); } else { a = { ...a, check_out_at: new Date().toISOString(), total_distance_km: 0 }; tracker.stop(); } paint(); return; }
       let r; try { r = await post("/attendance/" + kind, body); }
       catch (err) { if (err.status === 403 && /geo|m from|reason/i.test(err.message) && /override/i.test(err.message)) { const reason = prompt(err.message + "\n\nEnter a reason to request an override:"); if (!reason) throw err; r = await post("/attendance/" + kind, { ...body, override_reason: reason }); } else throw err; }
-      a = r; toast(kind === "check-in" ? "Checked in. Have a productive day!" : "Checked out. See you tomorrow."); kind === "check-in" ? tracker.start() : tracker.stop(); paint(); loadHist();
+      a = r; toast(kind === "check-in" ? "Logged in. Have a productive day!" : "Logged out. See you tomorrow."); kind === "check-in" ? tracker.start() : tracker.stop(); paint(); loadHist();
     } catch (err) { if (err.status === 428 && /CONSENT/.test(err.message)) { const { askConsent } = await import("./app.js"); const me = await get("/auth/me"); askConsent(me.tracking_policy); } else fail(err); } finally { paint(); }
   };
   const loadHist = async () => {
@@ -97,16 +97,16 @@ async function phoneHealth() {
 // ----------------------------------------------------------------- Live team
 const PALETTE = ["#175cd3", "#d92d20", "#067647", "#b54708", "#7a2fd4", "#0e9384", "#c11574", "#4d5565"];
 export async function team(root, S) {
-  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label><a class="btn sm" href="#/routehist">Past days</a>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
+  root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last log-in</label><a class="btn sm" href="#/routehist">Past days</a>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
     <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr);align-items:start"><div class="card" style="padding:8px;position:sticky;top:8px"><div id="map" class="map tall"></div></div><div class="card"><h2>Team</h2><div id="list" class="live-list">${skeleton(4)}</div><div id="detail" style="margin-top:12px"></div></div></div>`;
   $("#phh") && ($("#phh").onclick = phoneHealth);
   const map = makeMap($("#map"), S.tenant.settings.map_style, [20.5, 78.9], 5), markers = {}, lines = {}, extra = map ? L.layerGroup().addTo(map) : { clearLayers() {}, addLayer() {} }; let people = {}, routes = {}, selected = null, fitted = false;
   const col = uid => PALETTE[uid % PALETTE.length], stateCol = s => ({ live: "#067647", idle: "#b54708", offline: "#b42318", no_gps: "#175cd3", checked_out: "#98a2b3" }[s] || "#667085");
   const paintList = () => { const ps = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
     $("#list").innerHTML = ps.length ? ps.map(p => `<div class="live-item" data-u="${p.user_id}" style="${selected === p.user_id ? "background:var(--accent-soft)" : ""}"><span class="dot ${p.state}"></span><div class="grow"><strong>${esc(p.name)}</strong> <span style="display:inline-block;width:14px;height:4px;border-radius:2px;background:${col(p.user_id)};vertical-align:middle"></span>
-      <div class="small muted">${p.state === "no_gps" ? `Checked in ${fmtT(p.check_in_at)} · no live GPS yet` : p.state === "checked_out" ? "Checked out" : `${p.minutes_ago < 1 ? "just now" : p.minutes_ago + " min ago"} · 🔋${p.battery ?? "?"}% · ${p.network}${p.gps_on ? "" : " · <b style='color:var(--danger)'>GPS off</b>"}`}${routes[p.user_id] ? ` · ${routes[p.user_id].stats.distance_km} km` : ""}</div></div></div>`).join("") : `<div class="empty"><h3>No one has checked in today</h3>People appear here as soon as they check in.</div>`;
+      <div class="small muted">${p.state === "no_gps" ? `Logged in ${fmtT(p.check_in_at)} · no live GPS yet` : p.state === "checked_out" ? "Logged out" : `${p.minutes_ago < 1 ? "just now" : p.minutes_ago + " min ago"} · 🔋${p.battery ?? "?"}% · ${p.network}${p.gps_on ? "" : " · <b style='color:var(--danger)'>GPS off</b>"}`}${routes[p.user_id] ? ` · ${routes[p.user_id].stats.distance_km} km` : ""}</div></div></div>`).join("") : `<div class="empty"><h3>No one has logged in today</h3>People appear here as soon as they log in.</div>`;
     $$(".live-item").forEach(el => el.onclick = () => select(+el.dataset.u)); };
-  const place = p => { if (!map || p.lat == null) return; markers[p.user_id]?.remove(); markers[p.user_id] = L.marker([p.lat, p.lng], { icon: pinIcon(stateCol(p.state), p.name[0]) }).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${p.state === "no_gps" ? "Check-in location" : p.minutes_ago + " min ago"}`); };
+  const place = p => { if (!map || p.lat == null) return; markers[p.user_id]?.remove(); markers[p.user_id] = L.marker([p.lat, p.lng], { icon: pinIcon(stateCol(p.state), p.name[0]) }).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${p.state === "no_gps" ? "Log-in location" : p.minutes_ago + " min ago"}`); };
   const drawRoutes = () => { if (!map) return; Object.values(lines).forEach(l => l.remove()); for (const k in lines) delete lines[k];
     if (!$("#showr").checked) return;
     for (const [uid, r] of Object.entries(routes)) { if (selected && +uid === selected) continue; if (r.points.length > 1) lines[uid] = L.polyline(r.points, { color: col(+uid), weight: selected && selected != uid ? 2 : 4, opacity: selected && selected != uid ? .3 : .85 }).addTo(map); } };
@@ -114,7 +114,7 @@ export async function team(root, S) {
     if (!fitted) { const pts = ls.filter(p => p.lat != null).map(p => [p.lat, p.lng]); if (pts.length && map) { map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 }); fitted = true; } } };
   // One person, one day: the route, a log of what happened and when the phone was off the internet, off GPS or could not be reached.
   const hm = m => m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${m} min`;
-  const EP = { unreachable: ["#b42318", "Phone not reachable"], no_internet: ["#175cd3", "No internet"], gps_off: ["#b54708", "GPS off"], battery_low: ["#7a2fd4", "Battery low"], check_in: ["#067647", "Checked in"], check_out: ["#b42318", "Checked out"], visit: ["#0f766e", "Visit"], stop: ["#f59e0b", "Stop"] };
+  const EP = { unreachable: ["#b42318", "Phone not reachable"], no_internet: ["#175cd3", "No internet"], gps_off: ["#b54708", "GPS off"], battery_low: ["#7a2fd4", "Battery low"], check_in: ["#067647", "Logged in"], check_out: ["#b42318", "Logged out"], visit: ["#0f766e", "Visit"], stop: ["#f59e0b", "Stop"] };
   let shownDay = null;
   async function select(uid, day) {
     selected = uid; shownDay = day || today(); const p = people[uid];
@@ -131,7 +131,7 @@ export async function team(root, S) {
     if (selected !== uid || day !== shownDay) return;           // the person or day changed while this was loading
     extra.clearLayers();
     const box = $("#pday"); if (!box) return;
-    if (!d.found) { box.innerHTML = `<div class="empty" style="padding:12px"><h3>Nothing recorded</h3>No check-in or location data for ${fmtD(day)}.</div>`; if (people[uid]?.lat != null && map && fit && day === today()) map.setView([people[uid].lat, people[uid].lng], 15); return; }
+    if (!d.found) { box.innerHTML = `<div class="empty" style="padding:12px"><h3>Nothing recorded</h3>No log-in or location data for ${fmtD(day)}.</div>`; if (people[uid]?.lat != null && map && fit && day === today()) map.setView([people[uid].lat, people[uid].lng], 15); return; }
     const c = d.connectivity.totals, r = d.route, ls = d.last_seen, ts = d.time_split, pts = [];
     if (map) {
       if (r.polyline.length > 1) { L.polyline(r.polyline, { color: col(uid), weight: 5, opacity: .9 }).addTo(extra).bindTooltip("Route"); pts.push(...r.polyline); }

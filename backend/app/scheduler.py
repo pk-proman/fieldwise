@@ -14,6 +14,12 @@ log = logging.getLogger("fieldwise.scheduler")
 _last = {"hourly": None, "daily": None}
 
 
+def _lab(s, key, default):
+    """The workspace's own button wording, except the old default ("Check In"), which is now "Log In"."""
+    v = ((s.get("labels") or {}).get(key) or "").strip()
+    return default if not v or v.lower().replace("-", " ") in ("check in", "check out") else v
+
+
 def _tick_tenant(db, t: Tenant):
     s = t.settings or {}
     now_l, now = local_now(t), utcnow()
@@ -28,9 +34,9 @@ def _tick_tenant(db, t: Tenant):
     for u in users:
         a = atts.get(u.id)
         if today.weekday() not in off and start + timedelta(minutes=15) <= now_l < end and not (a and (a.check_in_at or a.status == "on_leave")):
-            notify(db, t.id, u.id, f"Time to {s.get('labels', {}).get('check_in', 'check in')}", "You haven't marked attendance yet today.", "reminder", f"ci:{today}")
+            notify(db, t.id, u.id, f"Time to {_lab(s, 'check_in', 'log in')}", "You haven't marked attendance yet today.", "reminder", f"ci:{today}")
         if a and a.check_in_at and not a.check_out_at and now_l >= end + timedelta(minutes=30):
-            notify(db, t.id, u.id, f"Time to {s.get('labels', {}).get('check_out', 'check out')}", "Your working hours have ended.", "reminder", f"co:{today}")
+            notify(db, t.id, u.id, f"Time to {_lab(s, 'check_out', 'log out')}", "Your working hours have ended.", "reminder", f"co:{today}")
         if a and a.check_in_at and not a.check_out_at:  # GPS / internet status alerts
             last = db.scalar(select(LocationPing).where(LocationPing.tenant_id == t.id, LocationPing.user_id == u.id).order_by(LocationPing.ts.desc()).limit(1))
             lim = s.get("gps_off_alert_min", 15)

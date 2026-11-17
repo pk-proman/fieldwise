@@ -181,7 +181,7 @@ def da_auto(body: dict, ctx: Ctx = Depends(current)):
     d = parse_day(body.get("day"), local_today(ctx.tenant))
     a = ctx.db.scalar(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == ctx.user.id, Attendance.day == d, Attendance.check_in_at.is_not(None), Attendance.check_out_at.is_not(None)))
     if not a:
-        raise HTTPException(422, "Daily allowance is available after you check out for that day.")
+        raise HTTPException(422, "Daily allowance is available after you log out for that day.")
     hours = (a.check_out_at - a.check_in_at).total_seconds() / 3600
     if hours < cfg["min_hours"]:
         raise HTTPException(422, f"You need at least {cfg['min_hours']:g} working hours; you logged {hours:.1f}.")

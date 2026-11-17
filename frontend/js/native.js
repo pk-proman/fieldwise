@@ -37,7 +37,7 @@ export async function startNativeTracking(onFix) {
   onFixCb = onFix; lastFixAt = realFixAt = Date.now();
   plugin("FieldwiseHealth")?.setDuty?.({ on: true }).catch?.(() => {});
   watcherId = await bg.addWatcher({
-    backgroundMessage: "Fieldwise is recording your route while you're checked in.", backgroundTitle: "Tracking on duty", requestPermissions: !!(() => { try { return localStorage.getItem("fw-trk-disclosure"); } catch { return null; } })(), stale: false, distanceFilter: 25,
+    backgroundMessage: "Fieldwise is recording your route while you're logged in.", backgroundTitle: "Tracking on duty", requestPermissions: !!(() => { try { return localStorage.getItem("fw-trk-disclosure"); } catch { return null; } })(), stale: false, distanceFilter: 25,
   }, (loc, err) => {
     if (err) { if (err.code === "NOT_AUTHORIZED") bg.openSettings?.(); return; }
     lastLoc = loc; lastFixAt = realFixAt = Date.now();

@@ -67,7 +67,7 @@ def fuel_auto(body: FuelIn, ctx: Ctx = Depends(current)):
     d = body.day or local_today(ctx.tenant)
     att = ctx.db.scalar(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == ctx.user.id, Attendance.day == d))
     if not att or att.total_distance_km <= 0:
-        raise HTTPException(422, "No tracked distance for that day. Fuel is calculated after you check out.")
+        raise HTTPException(422, "No tracked distance for that day. Fuel is calculated after you log out.")
     dup = ctx.db.scalar(select(ExpenseClaim.id).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == ctx.user.id, ExpenseClaim.day == d,
                                                       ExpenseClaim.category == "fuel", ExpenseClaim.distance_km.is_not(None),
                                                       ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)))

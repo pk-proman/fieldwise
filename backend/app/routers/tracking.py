@@ -160,7 +160,7 @@ def sessions(user_id: int | None = None, limit: int = 30, ctx: Ctx = Depends(cur
 def session_route(aid: int, ctx: Ctx = Depends(current)):
     a = ctx.db.get(Attendance, aid)
     if not a or a.tenant_id != ctx.tid or a.user_id not in ctx.team_ids() or not a.check_in_at:
-        raise HTTPException(404, "Check-in not found.")
+        raise HTTPException(404, "Log-in not found.")
     pings = _session_pings(ctx, a)
     end = a.check_out_at or utcnow()
     visits = ctx.db.execute(select(Visit, Customer.name, Customer.lat, Customer.lng).outerjoin(Customer, Customer.id == Visit.customer_id).where(
@@ -273,9 +273,9 @@ def person_day(user_id: int, day: str | None = None, ctx: Ctx = Depends(current)
               "lat": v.lat, "lng": v.lng, "outcome": v.outcome, "done": bool(v.ended_at)} for v, n in visits]
     log = []
     for a in atts:
-        log.append({"at": iso(a.check_in_at), "type": "check_in", "title": "Checked in", "lat": a.check_in_lat, "lng": a.check_in_lng})
+        log.append({"at": iso(a.check_in_at), "type": "check_in", "title": "Logged in", "lat": a.check_in_lat, "lng": a.check_in_lng})
         if a.check_out_at:
-            log.append({"at": iso(a.check_out_at), "type": "check_out", "title": "Checked out", "detail": f"{a.total_distance_km:g} km recorded" if a.total_distance_km else "", "lat": a.check_out_lat, "lng": a.check_out_lng})
+            log.append({"at": iso(a.check_out_at), "type": "check_out", "title": "Logged out", "detail": f"{a.total_distance_km:g} km recorded" if a.total_distance_km else "", "lat": a.check_out_lat, "lng": a.check_out_lng})
     for v in vlist:
         log.append({"at": v["from"], "type": "visit", "title": f"Visit: {v['customer']}", "detail": (f"{v['minutes']} min" if v["done"] else "in progress") + (f" · {v['outcome']}" if v["outcome"] else ""), "lat": v["lat"], "lng": v["lng"]})
     for st in (rd.stops if rd else []):

@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.5.0",
+  "versionCode": 9,
+  "versionName": "1.5.1",
   "minVersionCode": 1,
-  "releaseNotes": "Expense tracker: expected travel and allowance for every day, adjust it with a reason, add food, accommodation and other expenses\nManagers: tap a team member to see their route for any day, a full log, and when their phone had no internet, GPS or contact\nNew app icon with the Proman logo"
+  "releaseNotes": "Attendance buttons now say Log In and Log Out (customer visits still say Check in / Check out)\nExpense tracker: expected travel and allowance for every day, adjust it with a reason, add food, accommodation and other expenses\nManagers: tap a team member to see their route for any day, a full log, and when their phone had no internet, GPS or contact"
 }
