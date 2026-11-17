@@ -47,7 +47,7 @@ const ROUTES = [
   { p: "beats", t: "Beat plan", i: "route", f: bt.beats },
   { p: "meetings", t: "Meetings", i: "handshake", f: sales.meetings },
   { p: "visits", t: "Visits", i: "pin", f: vis.visits },
-  { p: "mytravel", t: "My travel", i: "route", f: mt.mytravel },
+  { p: "mytravel", t: "Expense tracker", i: "route", f: mt.mytravel },
   { p: "routes", t: "Routes", i: "route", f: crm.routes },
   { p: "routehist", t: "Route history", i: "route", f: rh.routehist },
   { p: "workhours", t: "Work hours", i: "clock", f: fld.workhours },

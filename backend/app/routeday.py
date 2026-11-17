@@ -33,25 +33,32 @@ def policy_for(tenant, user) -> dict:
     return base
 
 
-def compute_expense(tenant, user, rd: RouteDay, att: Attendance | None) -> dict:
-    p = policy_for(tenant, user)
-    km = rd.distance_km + (rd.est_km if p["include_estimated"] else 0)
+def fuel_for(p: dict, km: float) -> tuple[float, list]:
+    """Travel amount for `km` under policy `p`: rate per km, minimum distance, daily cap."""
     notes = []
     fuel = 0.0
     if km >= max(p["min_km"], 0.01) and p["rate_per_km"] > 0:
         fuel = km * p["rate_per_km"]
         if p["daily_cap"] and fuel > p["daily_cap"]:
-            fuel, notes = p["daily_cap"], notes + [f"fuel capped at {p['daily_cap']:g}"]
+            fuel, notes = p["daily_cap"], [f"fuel capped at {p['daily_cap']:g}"]
+    return fuel, notes
+
+
+def compute_expense(tenant, user, rd: RouteDay | None, att: Attendance | None) -> dict:
+    """What the rules give for one day. `rd` may be None (no route recorded): then only the allowance can apply."""
+    p = policy_for(tenant, user)
+    km = (rd.distance_km + (rd.est_km if p["include_estimated"] else 0)) if rd else 0.0
+    fuel, notes = fuel_for(p, km)
     allowance, kind = 0.0, ""
     if att and att.check_in_at:
-        out = p["outstation_km"] > 0 and rd.far_km >= p["outstation_km"] and p["allowance_outstation"] > 0
+        out = rd is not None and p["outstation_km"] > 0 and rd.far_km >= p["outstation_km"] and p["allowance_outstation"] > 0
         allowance, kind = (p["allowance_outstation"], "outstation") if out else (p["allowance_daily"], "daily")
-    if rd.est_km and not p["include_estimated"]:
+    if rd and rd.est_km and not p["include_estimated"]:
         notes.append(f"{rd.est_km:g} km across silent gaps not counted")
-    if rd.quality < 50 and rd.points:
+    if rd and rd.quality < 50 and rd.points:
         notes.append("low tracking quality: please review")
     return {"km": round(km, 2), "rate": p["rate_per_km"], "fuel": round(fuel, 2), "allowance": round(allowance, 2), "allowance_kind": kind,
-            "total": round(fuel + allowance, 2), "notes": notes, "mode": p["mode"], "quality": rd.quality}
+            "total": round(fuel + allowance, 2), "notes": notes, "mode": p["mode"], "quality": rd.quality if rd else None}
 
 
 def build(db, tenant, user_id: int, day: date) -> RouteDay | None:

@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.4.0",
+  "versionCode": 8,
+  "versionName": "1.5.0",
   "minVersionCode": 1,
-  "releaseNotes": "Customer visits: check in at the customer, no OTP; check out with the customer's details and a summary\nNew customers become leads automatically\nNew My travel screen: distance, visits and day-wise routes for any period\nLeave and expense claims are written to ERPNext\nManagers: team map and past days on a manager PIN phone"
+  "releaseNotes": "Expense tracker: expected travel and allowance for every day, adjust it with a reason, add food, accommodation and other expenses\nManagers: tap a team member to see their route for any day, a full log, and when their phone had no internet, GPS or contact\nNew app icon with the Proman logo"
 }

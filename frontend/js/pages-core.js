@@ -98,9 +98,9 @@ async function phoneHealth() {
 const PALETTE = ["#175cd3", "#d92d20", "#067647", "#b54708", "#7a2fd4", "#0e9384", "#c11574", "#4d5565"];
 export async function team(root, S) {
   root.innerHTML = `<div class="page-h"><h1>${esc(header(S, "team", "Live team"))}</h1><span class="chip" id="wsst">connecting…</span><label class="row small right"><input type="checkbox" id="showr" checked> Show routes since last check-in</label><a class="btn sm" href="#/routehist">Past days</a>${["manager", "admin", "owner"].includes(S.user.role) ? '<button class="btn sm" id="phh">Phone health</button>' : ""}</div>
-    <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr)"><div class="card" style="padding:8px"><div id="map" class="map tall"></div></div><div class="card"><h2>Team</h2><div id="list" class="live-list">${skeleton(4)}</div><div id="detail" style="margin-top:12px"></div></div></div>`;
+    <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(280px,1fr);align-items:start"><div class="card" style="padding:8px;position:sticky;top:8px"><div id="map" class="map tall"></div></div><div class="card"><h2>Team</h2><div id="list" class="live-list">${skeleton(4)}</div><div id="detail" style="margin-top:12px"></div></div></div>`;
   $("#phh") && ($("#phh").onclick = phoneHealth);
-  const map = makeMap($("#map"), S.tenant.settings.map_style, [20.5, 78.9], 5), markers = {}, lines = {}, extra = L.layerGroup().addTo(map || L.layerGroup()); let people = {}, routes = {}, selected = null, fitted = false;
+  const map = makeMap($("#map"), S.tenant.settings.map_style, [20.5, 78.9], 5), markers = {}, lines = {}, extra = map ? L.layerGroup().addTo(map) : { clearLayers() {}, addLayer() {} }; let people = {}, routes = {}, selected = null, fitted = false;
   const col = uid => PALETTE[uid % PALETTE.length], stateCol = s => ({ live: "#067647", idle: "#b54708", offline: "#b42318", no_gps: "#175cd3", checked_out: "#98a2b3" }[s] || "#667085");
   const paintList = () => { const ps = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
     $("#list").innerHTML = ps.length ? ps.map(p => `<div class="live-item" data-u="${p.user_id}" style="${selected === p.user_id ? "background:var(--accent-soft)" : ""}"><span class="dot ${p.state}"></span><div class="grow"><strong>${esc(p.name)}</strong> <span style="display:inline-block;width:14px;height:4px;border-radius:2px;background:${col(p.user_id)};vertical-align:middle"></span>
@@ -109,30 +109,53 @@ export async function team(root, S) {
   const place = p => { if (!map || p.lat == null) return; markers[p.user_id]?.remove(); markers[p.user_id] = L.marker([p.lat, p.lng], { icon: pinIcon(stateCol(p.state), p.name[0]) }).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${p.state === "no_gps" ? "Check-in location" : p.minutes_ago + " min ago"}`); };
   const drawRoutes = () => { if (!map) return; Object.values(lines).forEach(l => l.remove()); for (const k in lines) delete lines[k];
     if (!$("#showr").checked) return;
-    for (const [uid, r] of Object.entries(routes)) { if (r.points.length > 1) lines[uid] = L.polyline(r.points, { color: col(+uid), weight: selected && selected != uid ? 2 : 4, opacity: selected && selected != uid ? .3 : .85 }).addTo(map); } };
+    for (const [uid, r] of Object.entries(routes)) { if (selected && +uid === selected) continue; if (r.points.length > 1) lines[uid] = L.polyline(r.points, { color: col(+uid), weight: selected && selected != uid ? 2 : 4, opacity: selected && selected != uid ? .3 : .85 }).addTo(map); } };
   const load = async () => { const [ls, rs] = await Promise.all([get("/tracking/live"), get("/tracking/live-routes")]); people = Object.fromEntries(ls.map(p => [p.user_id, p])); routes = rs; Object.values(people).forEach(place); drawRoutes(); paintList();
     if (!fitted) { const pts = ls.filter(p => p.lat != null).map(p => [p.lat, p.lng]); if (pts.length && map) { map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 }); fitted = true; } } };
-  async function select(uid) {
-    selected = uid; extra.clearLayers(); drawRoutes(); paintList(); const p = people[uid], r = routes[uid]; if (r?.points.length > 1 && map) map.fitBounds(r.points, { padding: [40, 40], maxZoom: 16 }); else if (p?.lat != null && map) map.setView([p.lat, p.lng], 15);
-    $("#detail").innerHTML = `<h3>${esc(p?.name || "")}</h3><div id="dst" class="small" style="margin:6px 0">${r ? statsHTML(r.stats, `Since check-in at ${fmtT(r.check_in_at)}`) : "No session today."}</div><label class="f" style="margin-bottom:6px"><span>Previous check-ins</span><select id="ses"><option value="">Current session</option></select></label><div id="sdet" class="small"></div><button class="btn sm" id="clr">Clear selection</button>`;
-    $("#clr").onclick = () => { selected = null; extra.clearLayers(); $("#detail").innerHTML = ""; drawRoutes(); paintList(); };
-    try { const ss = await get("/tracking/sessions" + qs({ user_id: uid })); $("#ses").innerHTML += ss.map(a => `<option value="${a.id}">${fmtD(a.day)} · ${fmtT(a.check_in_at)}–${a.check_out_at ? fmtT(a.check_out_at) + " · " + a.distance_km + " km" : "in progress"}${a.flagged ? " ⚑" : ""}</option>`).join(""); } catch (e) { fail(e); }
-    $("#ses").onchange = async e => { extra.clearLayers(); if (!e.target.value) { $("#sdet").innerHTML = ""; drawRoutes(); return select(uid); } await showSession(+e.target.value, uid); };
+  // One person, one day: the route, a log of what happened and when the phone was off the internet, off GPS or could not be reached.
+  const hm = m => m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${m} min`;
+  const EP = { unreachable: ["#b42318", "Phone not reachable"], no_internet: ["#175cd3", "No internet"], gps_off: ["#b54708", "GPS off"], battery_low: ["#7a2fd4", "Battery low"], check_in: ["#067647", "Checked in"], check_out: ["#b42318", "Checked out"], visit: ["#0f766e", "Visit"], stop: ["#f59e0b", "Stop"] };
+  let shownDay = null;
+  async function select(uid, day) {
+    selected = uid; shownDay = day || today(); const p = people[uid];
+    drawRoutes(); paintList();
+    $("#detail").innerHTML = `<h3>${esc(p?.name || "")}</h3><div class="row" style="gap:6px;margin:6px 0"><button class="btn sm" id="dprev" aria-label="Previous day">◀</button><input type="date" id="dsel" value="${shownDay}" max="${today()}" aria-label="Day" style="width:auto"><button class="btn sm" id="dnext" aria-label="Next day">▶</button><button class="btn sm" id="dtoday">Today</button></div><div id="pday"><div class="muted small">Loading…</div></div><button class="btn sm" id="clr" style="margin-top:8px">Clear selection</button>`;
+    const go = d => { if (d && d <= today()) select(uid, d); };
+    const shift = n => { const d = new Date(shownDay + "T12:00:00"); d.setDate(d.getDate() + n); go(d.toISOString().slice(0, 10)); };
+    $("#dprev").onclick = () => shift(-1); $("#dnext").onclick = () => shift(1); $("#dtoday").onclick = () => go(today()); $("#dsel").onchange = e => go(e.target.value);
+    $("#clr").onclick = () => { selected = null; shownDay = null; extra.clearLayers(); $("#detail").innerHTML = ""; drawRoutes(); paintList(); };
+    await loadDay(uid, shownDay, true);
   }
-  const statsHTML = (s, title) => `<b>${title}</b><br>Distance <b>${s.distance_km} km</b> · ${s.points} GPS points<br>GPS off <b>${s.gps_off_min} min</b> · Internet off <b>${s.internet_off_min} min</b><br>Lowest battery <b>${s.min_battery ?? "?"}%</b>${s.mock_points ? ` · <span style="color:var(--danger)">${s.mock_points} suspicious points</span>` : ""}`;
-  async function showSession(aid, uid) {
-    const d = await get("/tracking/session/" + aid); Object.values(lines).forEach(l => l.setStyle({ opacity: .12 })); extra.clearLayers(); const pts = d.points.map(p => [p.lat, p.lng]), c = col(uid);
-    if (pts.length > 1) L.polyline(pts, { color: c, weight: 5 }).addTo(extra).bindTooltip("Route");
-    if (d.attendance.in[0] != null) L.circleMarker(d.attendance.in, { radius: 8, color: "#fff", weight: 2, fillColor: "#067647", fillOpacity: 1 }).addTo(extra).bindPopup(`Checked in ${fmtDT(d.attendance.check_in_at)}`);
-    if (d.attendance.out) L.circleMarker(d.attendance.out, { radius: 8, color: "#fff", weight: 2, fillColor: "#b42318", fillOpacity: 1 }).addTo(extra).bindPopup(`Checked out ${fmtDT(d.attendance.check_out_at)}`);
-    d.visits.forEach((v, i) => v.lat != null && L.marker([v.lat, v.lng], { icon: pinIcon("#0f766e", i + 1) }).addTo(extra).bindPopup(`${esc(v.customer || "Visit")}<br>${fmtT(v.started_at)}${v.ended_at ? "–" + fmtT(v.ended_at) : ""}`));
-    const all = [...pts, ...(d.attendance.in[0] != null ? [d.attendance.in] : [])]; if (all.length && map) map.fitBounds(all, { padding: [40, 40], maxZoom: 16 });
-    $("#sdet").innerHTML = statsHTML(d.stats, `${fmtDT(d.attendance.check_in_at)} → ${d.attendance.check_out_at ? fmtDT(d.attendance.check_out_at) : "still open"}`) + (d.visits.length ? `<br>${d.visits.length} customer visit(s)` : "") + (d.attendance.flagged ? `<br><span style="color:var(--warn)">⚑ ${esc(d.attendance.flagged)}</span>` : "") + (pts.length ? "" : "<br><i>No GPS breadcrumbs were recorded for this check-in.</i>");
-    const an = d.analysis; if (an) { const hm = m => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; $("#sdet").insertAdjacentHTML("beforeend", `<div style="margin-top:6px"><b>Time split:</b> on site ${hm(an.on_site_min)} · travelling ${hm(an.travel_min)} · idle ${hm(an.idle_min)} · no signal ${hm(an.gap_min)}${an.overtime_min ? ` · overtime ${hm(an.overtime_min)}` : ""}</div>${an.anomalies.length ? `<div style="color:var(--warn)">⚑ ${an.anomalies.map(a => esc(a.detail)).join("; ")}</div>` : ""}`); an.stops.forEach(s => L.marker([s.lat, s.lng], { icon: pinIcon(s.kind === "customer" ? "#067647" : "#b54708", "•") }).addTo(extra).bindPopup(`${esc(s.place || "Stop")}<br>${s.minutes} min`)); }
+  async function loadDay(uid, day, fit) {
+    let d; try { d = await get("/tracking/person-day" + qs({ user_id: uid, day })); } catch (e) { if (selected === uid && day === shownDay && $("#pday")) $("#pday").innerHTML = ""; return fail(e); }
+    if (selected !== uid || day !== shownDay) return;           // the person or day changed while this was loading
+    extra.clearLayers();
+    const box = $("#pday"); if (!box) return;
+    if (!d.found) { box.innerHTML = `<div class="empty" style="padding:12px"><h3>Nothing recorded</h3>No check-in or location data for ${fmtD(day)}.</div>`; if (people[uid]?.lat != null && map && fit && day === today()) map.setView([people[uid].lat, people[uid].lng], 15); return; }
+    const c = d.connectivity.totals, r = d.route, ls = d.last_seen, ts = d.time_split, pts = [];
+    if (map) {
+      if (r.polyline.length > 1) { L.polyline(r.polyline, { color: col(uid), weight: 5, opacity: .9 }).addTo(extra).bindTooltip("Route"); pts.push(...r.polyline); }
+      d.connectivity.episodes.filter(e => e.kind === "unreachable" && e.at && e.to_at).forEach(e => L.polyline([e.at, e.to_at], { color: "#b42318", weight: 3, dashArray: "6 8", opacity: .8 }).addTo(extra).bindTooltip(`No contact for ${hm(e.minutes)}`));
+      if (r.polyline.length) { L.circleMarker(r.polyline[0], { radius: 7, color: "#fff", weight: 2, fillColor: "#067647", fillOpacity: 1 }).addTo(extra).bindPopup("Start of day"); if (!(d.is_today && d.sessions.some(s => s.open))) L.circleMarker(r.polyline[r.polyline.length - 1], { radius: 7, color: "#fff", weight: 2, fillColor: "#b42318", fillOpacity: 1 }).addTo(extra).bindPopup("Last location"); }
+      d.stops.forEach(s => L.circleMarker([s.lat, s.lng], { radius: 6, color: "#fff", weight: 2, fillColor: "#f59e0b", fillOpacity: 1 }).addTo(extra).bindPopup(`Stopped ${s.min} min · ${fmtT(s.from)}`));
+      d.visits.forEach((v, i) => { if (v.lat != null) { L.marker([v.lat, v.lng], { icon: pinIcon("#0f766e", i + 1) }).addTo(extra).bindPopup(`${esc(v.customer)}<br>${fmtT(v.from)}${v.to ? "–" + fmtT(v.to) : ""}`); pts.push([v.lat, v.lng]); } });
+      d.connectivity.episodes.filter(e => e.at && e.kind !== "battery_low").forEach(e => L.circleMarker(e.at, { radius: 6, color: "#fff", weight: 2, fillColor: EP[e.kind][0], fillOpacity: 1 }).addTo(extra).bindPopup(`${EP[e.kind][1]} · ${hm(e.minutes)}<br>from ${fmtT(e.from)} to ${fmtT(e.to)}`));
+      map.invalidateSize();
+      if (fit && pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+    }
+    const stat = (v, l, bad) => `<div style="flex:1 1 90px"><div style="font-weight:700;font-size:17px${bad ? ";color:var(--danger)" : ""}">${v}</div><div class="small muted">${l}</div></div>`;
+    box.innerHTML = `${d.is_today && ls ? `<div class="small" style="margin-bottom:6px">Last seen <b>${ls.minutes_ago < 1 ? "just now" : ls.minutes_ago < 90 ? ls.minutes_ago + " min ago" : fmtT(ls.at)}</b> · 🔋${ls.battery ?? "?"}% · ${esc(ls.network)}${ls.gps_on ? "" : " · <b style='color:var(--danger)'>GPS off</b>"}</div>` : ""}
+      <div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:8px">${stat(r.distance_km + " km", "travelled")}${stat(hm(r.moving_min), "moving")}${stat(hm(r.stop_min), "stopped")}${stat(d.visits.length, "customer visits")}</div>
+      <div class="card" style="padding:8px 10px;margin-bottom:8px"><div class="small muted" style="margin-bottom:4px">Phone connectivity · reporting ${c.reporting_pct ?? "—"}% of the time${r.quality != null ? ` · route quality ${r.quality}%` : ""}</div>
+        <div class="row" style="flex-wrap:wrap;gap:10px">${stat(hm(c.unreachable_min), "not reachable", c.unreachable_min >= 30)}${stat(hm(c.no_internet_min), "no internet")}${stat(hm(c.gps_off_min), "GPS off")}</div></div>
+      ${ts ? `<div class="small" style="margin-bottom:8px"><b>Time split:</b> on site ${hm(ts.on_site_min)} · travelling ${hm(ts.travel_min)} · idle ${hm(ts.idle_min)} · no signal ${hm(ts.gap_min)}${ts.overtime_min ? ` · overtime ${hm(ts.overtime_min)}` : ""}${ts.anomalies.length ? `<div style="color:var(--warn)">⚑ ${ts.anomalies.map(esc).join("; ")}</div>` : ""}</div>` : ""}
+      <div class="small muted" style="margin-bottom:4px">Log for ${fmtD(day)} · tap an entry to see it on the map</div>
+      <div id="plog" style="max-height:320px;overflow:auto;border-top:1px solid var(--border)">${d.log.map((x, i) => `<div class="small" data-i="${i}" style="display:flex;gap:8px;padding:6px 2px;border-bottom:1px solid var(--border);${x.lat != null ? "cursor:pointer" : ""}"><span class="mono" style="min-width:48px">${fmtT(x.at)}</span><span style="width:10px;height:10px;border-radius:50%;margin-top:4px;flex:none;background:${(EP[x.type] || ["#667085"])[0]}"></span><div><b>${esc(x.title)}</b>${x.detail ? `<div class="muted">${esc(x.detail)}</div>` : ""}</div></div>`).join("") || '<div class="muted small" style="padding:8px">No events.</div>'}</div>`;
+    $$("#plog [data-i]").forEach(el => el.onclick = () => { const x = d.log[+el.dataset.i]; if (map && x.lat != null) { map.setView([x.lat, x.lng], 16); L.popup().setLatLng([x.lat, x.lng]).setContent(`<b>${esc(x.title)}</b><br>${fmtT(x.at)}`).openOn(map); } });
   }
   $("#showr").onchange = drawRoutes;
   await load();
-  const iv = setInterval(() => load().catch(() => {}), 60000);
+  const iv = setInterval(() => { load().catch(() => {}); if (selected && shownDay === today()) loadDay(selected, shownDay, false).catch(() => {}); }, 60000);
   let ws; try { ws = new WebSocket(wsBase() + "/api/ws/live?token=" + encodeURIComponent(session.token));
     ws.onopen = () => { const s = $("#wsst"); if (s) { s.textContent = "● live"; s.className = "chip ok"; } }; ws.onclose = () => { const s = $("#wsst"); if (s) { s.textContent = "reconnect on refresh"; s.className = "chip warn"; } };
     ws.onmessage = ev => { const m = JSON.parse(ev.data); if (m.type !== "ping" || m.lat == null) return; people[m.user_id] = { ...(people[m.user_id] || {}), ...m, state: "live", minutes_ago: 0 }; place(people[m.user_id]);

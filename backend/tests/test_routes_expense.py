@@ -123,3 +123,11 @@ def test_period_summary(client):
     assert r["totals"]["km"] > 3 and r["mode"] == "shadow" and r["days"][0]["calc"]["fuel"] > 10
     assert client.get(f"/api/expenses/period?user_id={other}", headers=rh).status_code == 403
     assert client.get("/api/expenses/period?start=2026-01-01&end=2026-12-31", headers=rh).status_code == 422
+
+
+def test_rollup_handles_postgres_decimals():
+    from decimal import Decimal
+    from app.routers.tracking import rollup
+    agg = {1: tuple(float(x or 0) for x in (Decimal("12.5"), Decimal("1.5"), 3, Decimal("88.3333"), 40, 120)), 2: (7.0, 0.0, 2.0, 70.0, 10.0, 60.0)}
+    r = rollup(agg, [1, 2, 99])
+    assert r == {"distance_km": 19.5, "est_km": 1.5, "days": 5, "quality": 81, "stop_min": 50, "moving_min": 180}

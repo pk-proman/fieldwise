@@ -8,7 +8,7 @@ const src = join(root, "..", "frontend");
 const out = join(root, "www");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-for (const d of ["css", "js"]) cpSync(join(src, d), join(out, d), { recursive: true });
+for (const d of ["css", "js", "vendor"]) cpSync(join(src, d), join(out, d), { recursive: true });
 cpSync(join(src, "icon.svg"), join(out, "icon.svg"));
 let html = readFileSync(join(src, "index.html"), "utf8")
   .replace('<link rel="manifest" href="/manifest.webmanifest">\n', "")

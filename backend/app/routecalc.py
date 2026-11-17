@@ -4,6 +4,7 @@ Rules are deliberately simple and explainable because the result drives expense 
   - ignore tiny movements that are just GPS drift while standing still;
   - reject impossible jumps (faster than a car on a highway);
   - when the phone was silent for a long time (off, no GPS), do NOT count the missing stretch as tracked: report it separately as "estimated"."""
+from datetime import timedelta
 from .geo import haversine_m
 
 MAX_ACCURACY_M = 60          # points less accurate than this are ignored
@@ -105,3 +106,87 @@ def analyse(pings) -> dict:
     out["quality"] = max(0, round(cover * 100 - acc_pen - mock_pen))
     out["polyline"] = [[round(p[0], 5), round(p[1], 5)] for p in _rdp([(p.lat, p.lng) for p in kept], 12)][:400]
     return out
+
+
+# ---------------------------------------------------------------- phone reachability
+REACH_GAP_MIN = 10           # no data for longer than this = the phone could not be reached
+MIN_FLAG_MIN = 2             # internet / GPS flags shorter than this are noise
+LOW_BATTERY = 15
+
+
+def connectivity(pings, start=None, end=None, gap_min: int = REACH_GAP_MIN) -> dict:
+    """What happened to the phone between `start` and `end` (datetimes, naive UTC) from the breadcrumbs it sent.
+    Three kinds of episode, each with when it began, how long it lasted and where the person last was:
+      unreachable: no data at all for more than `gap_min` minutes (phone off, app stopped, no signal and no GPS);
+      no_internet: the phone itself reported being offline (the breadcrumbs were saved and sent later);
+      gps_off:     the phone reported its location switch off.
+    A ping stands for the time up to the next ping; when that is longer than `gap_min` minutes the silence is counted as unreachable instead."""
+    cap = gap_min * 60
+    pts = sorted(pings, key=lambda p: p.ts)
+    if not pts:
+        return {"episodes": [], "totals": {"unreachable_min": 0, "no_internet_min": 0, "gps_off_min": 0, "window_min": 0, "reporting_pct": None, "last_battery": None}}
+    start = start or pts[0].ts
+    end = end or pts[-1].ts
+    iso = lambda t: t.isoformat() + "Z"
+    pos = lambda p: [round(p.lat, 5), round(p.lng, 5)] if p.lat is not None and p.lng is not None else None
+    episodes = []
+
+    def last_pos(i):                     # last known position at or before ping i
+        for j in range(i, -1, -1):
+            if pts[j].lat is not None:
+                return pos(pts[j])
+        return None
+
+    def first_pos(i):
+        for j in range(i, len(pts)):
+            if pts[j].lat is not None:
+                return pos(pts[j])
+        return None
+
+    unreach = 0.0
+    # silent stretches: before the first ping, between pings, after the last ping
+    marks = [(start, None, None)] if (pts[0].ts - start).total_seconds() > cap else []
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        if (b.ts - a.ts).total_seconds() > cap and a.ts >= start and b.ts <= end:
+            minutes = round((b.ts - a.ts).total_seconds() / 60)
+            unreach += minutes
+            episodes.append({"kind": "unreachable", "from": iso(a.ts), "to": iso(b.ts), "minutes": minutes, "at": last_pos(i), "to_at": first_pos(i + 1), "battery": a.battery})
+    if marks:
+        minutes = round((pts[0].ts - start).total_seconds() / 60)
+        unreach += minutes
+        episodes.append({"kind": "unreachable", "from": iso(start), "to": iso(pts[0].ts), "minutes": minutes, "at": None, "to_at": first_pos(0), "battery": None, "note": "no data after check-in"})
+    if (end - pts[-1].ts).total_seconds() > cap:
+        minutes = round((end - pts[-1].ts).total_seconds() / 60)
+        unreach += minutes
+        episodes.append({"kind": "unreachable", "from": iso(pts[-1].ts), "to": iso(end), "minutes": minutes, "at": last_pos(len(pts) - 1), "to_at": None, "battery": pts[-1].battery, "ongoing": True})
+
+    def runs(kind, bad):
+        """Consecutive pings for which `bad(p)` holds, each worth the time to the next ping (unless that is a silent gap)."""
+        total, i, n = 0.0, 0, len(pts)
+        while i < n:
+            if not bad(pts[i]):
+                i += 1
+                continue
+            j, secs = i, 0.0
+            while j < n and bad(pts[j]):
+                nxt = pts[j + 1].ts if j + 1 < n else end
+                gap = (nxt - pts[j].ts).total_seconds()
+                secs += gap if 0 <= gap <= cap else 0          # a longer silence is reported as "unreachable", not counted twice
+                j += 1
+            minutes = round(secs / 60)
+            if minutes >= MIN_FLAG_MIN:
+                total += minutes
+                episodes.append({"kind": kind, "from": iso(pts[i].ts), "to": iso(pts[i].ts + timedelta(seconds=secs)), "minutes": minutes, "at": last_pos(i), "to_at": None, "battery": pts[i].battery})
+            i = j
+        return total
+
+    net = runs("no_internet", lambda p: p.network == "offline")
+    gps = runs("gps_off", lambda p: p.gps_on is False)
+    for i, p in enumerate(pts):          # first time the battery dropped to a low level
+        if p.battery is not None and p.battery <= LOW_BATTERY and (i == 0 or pts[i - 1].battery is None or pts[i - 1].battery > LOW_BATTERY):
+            episodes.append({"kind": "battery_low", "from": iso(p.ts), "to": iso(p.ts), "minutes": 0, "at": pos(p), "to_at": None, "battery": p.battery})
+    episodes.sort(key=lambda e: e["from"])
+    window = max(round((end - start).total_seconds() / 60), 0)
+    return {"episodes": episodes, "totals": {"unreachable_min": int(unreach), "no_internet_min": int(net), "gps_off_min": int(gps), "window_min": window,
+            "reporting_pct": round(100 * max(window - unreach, 0) / window) if window else None, "last_battery": next((p.battery for p in reversed(pts) if p.battery is not None), None)}}

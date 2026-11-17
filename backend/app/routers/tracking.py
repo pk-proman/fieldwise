@@ -236,6 +236,77 @@ def trail(user_id: int | None = None, day: str | None = None, ctx: Ctx = Depends
                                                      for p in pings if p.lat is not None]}
 
 
+@router.get("/tracking/person-day")
+def person_day(user_id: int, day: str | None = None, ctx: Ctx = Depends(current)):
+    """Everything about one person's day for the live-team panel: the route travelled, stops and visits, a time-ordered log, and when the phone was
+    off the internet, off GPS or could not be reached at all."""
+    from .. import routeday, routecalc
+    if user_id not in ctx.team_ids():
+        raise HTTPException(403, "You can only view your own team.")
+    today = local_today(ctx.tenant)
+    d = parse_day(day, today)
+    s, e = local_day_bounds_utc(ctx.tenant, d)
+    u = ctx.db.get(User, user_id)
+    pings = ctx.db.scalars(select(LocationPing).where(LocationPing.tenant_id == ctx.tid, LocationPing.user_id == user_id, LocationPing.ts >= s, LocationPing.ts < e)
+                           .order_by(LocationPing.ts)).all()
+    atts = ctx.db.scalars(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == user_id, Attendance.check_in_at >= s, Attendance.check_in_at < e,
+                                                   Attendance.deleted_at.is_(None)).order_by(Attendance.check_in_at)).all()
+    out = {"user": {"id": u.id, "name": u.name}, "day": d.isoformat(), "is_today": d == today, "found": bool(pings or atts)}
+    if not out["found"]:
+        return out
+    now = utcnow()
+    first = min([x for x in ([atts[0].check_in_at] if atts else []) + ([pings[0].ts] if pings else [])])
+    open_now = bool(atts and atts[-1].check_out_at is None and d == today)
+    if atts and atts[-1].check_out_at:
+        last = atts[-1].check_out_at
+    elif open_now:
+        last = now
+    else:
+        last = pings[-1].ts if pings else atts[-1].check_in_at
+    conn = routecalc.connectivity(pings, first, last)
+    rd = routeday.build(ctx.db, ctx.tenant, user_id, d) if pings else None
+    ctx.db.commit()
+    visits = ctx.db.execute(select(Visit, Customer.name).outerjoin(Customer, Customer.id == Visit.customer_id).where(
+        Visit.tenant_id == ctx.tid, Visit.user_id == user_id, Visit.started_at >= s, Visit.started_at < e).order_by(Visit.started_at)).all()
+    iso = lambda t: t.isoformat() + "Z" if t else None
+    vlist = [{"id": v.id, "customer": n or (v.prospect or {}).get("name") or "Customer", "from": iso(v.started_at), "to": iso(v.ended_at), "minutes": int(((v.ended_at or (now if open_now else v.started_at)) - v.started_at).total_seconds() // 60),
+              "lat": v.lat, "lng": v.lng, "outcome": v.outcome, "done": bool(v.ended_at)} for v, n in visits]
+    log = []
+    for a in atts:
+        log.append({"at": iso(a.check_in_at), "type": "check_in", "title": "Checked in", "lat": a.check_in_lat, "lng": a.check_in_lng})
+        if a.check_out_at:
+            log.append({"at": iso(a.check_out_at), "type": "check_out", "title": "Checked out", "detail": f"{a.total_distance_km:g} km recorded" if a.total_distance_km else "", "lat": a.check_out_lat, "lng": a.check_out_lng})
+    for v in vlist:
+        log.append({"at": v["from"], "type": "visit", "title": f"Visit: {v['customer']}", "detail": (f"{v['minutes']} min" if v["done"] else "in progress") + (f" · {v['outcome']}" if v["outcome"] else ""), "lat": v["lat"], "lng": v["lng"]})
+    for st in (rd.stops if rd else []):
+        log.append({"at": st["from"], "type": "stop", "title": f"Stopped {st['min']} min", "detail": "", "lat": st["lat"], "lng": st["lng"]})
+    titles = {"unreachable": "Phone not reachable", "no_internet": "No internet", "gps_off": "GPS switched off", "battery_low": "Battery low"}
+    for ep in conn["episodes"]:
+        det = (f"{ep['minutes']} min" if ep["minutes"] else "") + (f" · battery was {ep['battery']}%" if ep.get("battery") is not None and ep["kind"] == "unreachable" else "") + (" · still silent" if ep.get("ongoing") else "") + (f" · {ep['note']}" if ep.get("note") else "")
+        log.append({"at": ep["from"], "type": ep["kind"], "title": titles[ep["kind"]] + (f" ({ep['battery']}%)" if ep["kind"] == "battery_low" else ""), "detail": det.strip(" ·"), "minutes": ep["minutes"],
+                    "lat": (ep["at"] or [None, None])[0], "lng": (ep["at"] or [None, None])[1]})
+    log.sort(key=lambda x: x["at"])
+    lastp = pings[-1] if pings else None
+    split = {"on_site_min": 0, "travel_min": 0, "idle_min": 0, "gap_min": 0, "overtime_min": 0, "anomalies": []}
+    try:
+        from .field import analyze_session
+        for a in atts:
+            an = analyze_session(ctx.db, ctx.tenant, a)
+            for k in ("on_site_min", "travel_min", "idle_min", "gap_min", "overtime_min"):
+                split[k] += int(an.get(k) or 0)
+            split["anomalies"] += [x.get("detail", "") for x in an.get("anomalies", [])]
+    except Exception:       # the time split is a bonus: never lose the route over it
+        split = None
+    if not atts:
+        split = None
+    out.update({"time_split": split, "sessions": [{"id": a.id, "check_in_at": iso(a.check_in_at), "check_out_at": iso(a.check_out_at), "open": a.check_out_at is None} for a in atts],
+                "route": {"polyline": rd.polyline if rd else [], "distance_km": rd.distance_km if rd else 0, "est_km": rd.est_km if rd else 0, "quality": rd.quality if rd else None,
+                          "moving_min": rd.moving_min if rd else 0, "stop_min": rd.stop_min if rd else 0, "points": len(pings)},
+                "stops": rd.stops if rd else [], "visits": vlist, "connectivity": conn, "log": log,
+                "last_seen": ({"at": iso(lastp.ts), "minutes_ago": round((now - lastp.ts).total_seconds() / 60), "battery": lastp.battery, "network": lastp.network, "gps_on": lastp.gps_on} if lastp else None)})
+    return out
+
+
 @router.websocket("/ws/live")
 async def ws_live(ws: WebSocket, token: str = Query("")):
     await ws.accept()
@@ -284,6 +355,17 @@ def _row(rd: RouteDay, full=False):
     return d
 
 
+def rollup(agg: dict, ids) -> dict:
+    """Adds up the per-person monthly totals of everyone in `ids` (agg values: km, est_km, days, avg quality, stop_min, moving_min)."""
+    km = est = days = q = st = mv = 0.0
+    n = 0.0
+    for i in ids:
+        a = agg.get(i)
+        if a:
+            km += a[0]; est += a[1]; days += a[2]; q += a[3] * a[2]; n += a[2]; st += a[4]; mv += a[5]
+    return {"distance_km": round(km, 1), "est_km": round(est, 1), "days": int(days), "quality": round(q / n) if n else None, "stop_min": int(st), "moving_min": int(mv)}
+
+
 @router.get("/tracking/history/team")
 def history_team(month: str | None = None, manager_id: int | None = None, ctx: Ctx = Depends(current)):
     """One level of the hierarchy: the chosen manager (default: me) and each direct report, with the whole branch under each report rolled up."""
@@ -295,17 +377,11 @@ def history_team(month: str | None = None, manager_id: int | None = None, ctx: C
     rows = ctx.db.execute(select(RouteDay.user_id, func.sum(RouteDay.distance_km), func.sum(RouteDay.est_km), func.count(RouteDay.id), func.avg(RouteDay.quality),
                                  func.sum(RouteDay.stop_min), func.sum(RouteDay.moving_min)).where(
         RouteDay.tenant_id == ctx.tid, RouteDay.day >= first, RouteDay.day < nxt, RouteDay.user_id.in_(team), RouteDay.points > 0).group_by(RouteDay.user_id)).all()
-    agg = {r[0]: r[1:] for r in rows}
+    agg = {r[0]: tuple(float(x or 0) for x in r[1:]) for r in rows}   # PostgreSQL returns sums and averages as exact decimals: plain floats from here on
     users = {u.id: u for u in ctx.db.scalars(select(User).where(User.tenant_id == ctx.tid, User.id.in_(team)))}
 
     def roll(ids):
-        km = est = days = q = st = mv = 0.0
-        n = 0
-        for i in ids:
-            a = agg.get(i)
-            if a:
-                km += a[0] or 0; est += a[1] or 0; days += a[2]; q += (a[3] or 0) * a[2]; n += a[2]; st += a[4] or 0; mv += a[5] or 0
-        return {"distance_km": round(km, 1), "est_km": round(est, 1), "days": int(days), "quality": round(q / n) if n else None, "stop_min": int(st), "moving_min": int(mv)}
+        return rollup(agg, ids)
     out = []
     me = users.get(root)
     if me:

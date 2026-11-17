@@ -156,9 +156,9 @@ const FIELD = [
       { t: "Checked out", rows: ["c:New lead: Ravi Steel", "t:Summary emailed to manager"], cap: "A new customer is added as a lead; a known one is updated" },
     ],
     flow: ["Visit flow", ["Reach the customer", "Check in|location recorded, visit ACTIVE", "Pick or type the customer", "Meet, add details as you go", "Check out|customer data + summary required", "?New customer?", "+Added as a lead", "+Existing customer updated"], "Needed to check out: customer name, mobile number, product of interest (for a new customer) and a visit summary. If the mobile number already belongs to a customer or lead, that record is updated instead of creating a duplicate. If your admin made a form compulsory, fill it before checking out."] },
-  { id: "f-travel", title: "My travel: distance, visits and expenses for a period", what: "See, for this month, last month or any dates, how far you travelled, every visit you made, your route for each day, and what the expense rules work out. Tap a day for the map and that day's visits.",
+  { id: "f-travel", title: "Expense tracker: your travel and expenses day by day", what: "See, for this month, last month or any dates, how far you travelled, every visit you made and the amount the rules expect for each day. Tap a day to change the travel amount (give a short reason), add food, accommodation, taxi or other expenses, and claim it.",
     steps: [
-      { t: "My travel", rows: ["i:This month ▾", "c:412 km · 38 visits", "t:Rules give ₹2,472", "l:10 Nov|42 km · 3 visits", "*l:11 Nov|38 km · 4 visits"], cap: "Open <b>My travel</b> and choose a period" },
+      { t: "Expense tracker", rows: ["i:This month ▾", "c:412 km · 38 visits", "t:Expected ₹2,472", "l:10 Nov|42 km · ₹252", "*l:11 Nov|38 km · ₹228"], cap: "Open <b>Expense tracker</b> and choose a period" },
       { t: "11 Nov", rows: ["m", "t:38 km tracked · quality 92%", "l:Sharma Traders|35 min", "l:Ravi Steel|20 min"], cap: "Tap a day: route map, visits and the amount" },
     ],
     tip: "The calculated amount is a preview until your company switches automatic expenses on. Claim your expenses in <b>Expenses</b>." },
@@ -319,7 +319,7 @@ document.getElementById("app").innerHTML =
     <details><summary>The PIN is not accepted</summary><p>Check three things: the company code, the <b>mobile number your admin registered</b> (not another number of yours), and the PIN. A PIN works once and for 48 hours, and locks after 5 wrong tries. Ask your admin for a new one.</p></details>
     <details><summary>I changed my phone or reinstalled the app</summary><p>Ask your admin for a new PIN and activate again. Your old data stays. The old phone stops working.</p></details>
     <details><summary>Managers and admins: I cannot sign in on the web</summary><p>You need the company code, your email and your password. Use <b>Forgot your password?</b> if needed.</p></details>
-    <details><summary>My travel claim looks too low</summary><p>Only trusted GPS is counted. If your phone was off or had no GPS for a while, those stretches are shown as estimated and not counted. Tell your manager; they can see the route and correct the claim.</p></details>
+    <details><summary>The travel amount in my Expense tracker looks too low</summary><p>Only trusted GPS is counted. If your phone was off or had no GPS for a while, those stretches are shown as estimated and not counted. Tell your manager; they can see the route and correct the claim.</p></details>
     <details><summary>The app says “Update available”</summary><p>Tap <b>Download update</b>, open the file and install. You stay signed in and keep your data.</p></details>
     <details><summary>I have no internet</summary><p>Check-ins and location points are saved on the phone and sent automatically when you are back online. A small bar shows how many items are waiting.</p></details>
     <details><summary>Fingerprint does not work</summary><p>Fingerprint or face is used only if your phone has one set up. Otherwise check-in still works with your location.</p></details>

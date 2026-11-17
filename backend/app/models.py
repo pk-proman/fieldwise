@@ -217,6 +217,8 @@ class ExpenseClaim(TenantMixin, Base):
     approvals: Mapped[list] = mapped_column(JSON, default=list)  # [{by, name, at, note}]
     source: Mapped[str] = mapped_column(String(10), default="manual")   # manual | auto (computed from the day's route and the expense rules)
     erp_error: Mapped[str] = mapped_column(String(300), default="")    # why the last write-back to ERPNext failed (retried hourly)
+    calc_amount: Mapped[float | None] = mapped_column(Float, nullable=True)   # what the expense rules worked out, when the amount was changed by hand
+    adjust_note: Mapped[str] = mapped_column(String(300), default="")         # why it was changed
 
 
 class Customer(TenantMixin, Base):

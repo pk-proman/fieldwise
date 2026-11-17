@@ -24,19 +24,34 @@ const tile = (size, scale, { bg = true, flat } = {}) => {
 };
 const png = (buf, file, size) => sharp(buf).resize(size, size).png().toFile(file);
 
+// App icon = the Fieldwise mark with the Proman wordmark under it (frontend/brand/proman-wordmark.png, the company's own logo).
+const logoSrc = readFileSync(join(brand, "proman-wordmark.png"));
+async function stack(size, { markFrac, logoFrac, gap = 0.05, bg = true }) {
+  const markPx = size * markFrac, logoW = Math.round(size * logoFrac), meta = await sharp(logoSrc).metadata();
+  const logoH = Math.round(logoW * meta.height / meta.width), group = markPx + size * gap + logoH, top = (size - group) / 2, k = markPx / 512;
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${TILE[0]}"/><stop offset="1" stop-color="${TILE[1]}"/></linearGradient></defs>
+    ${bg ? `<rect width="${size}" height="${size}" fill="url(#tile)"/>` : ""}<g transform="translate(${(size - markPx) / 2} ${top}) scale(${k})">${markBody}</g></svg>`);
+  const logo = await sharp(logoSrc).resize({ width: logoW, kernel: "lanczos3" }).png().toBuffer();
+  return sharp(svg).composite([{ input: logo, left: Math.round((size - logoW) / 2), top: Math.round(top + markPx + size * gap) }]).png().toBuffer();
+}
+const iconFull = await stack(1024, { markFrac: 0.50, logoFrac: 0.68 });
+const iconSafe = await stack(1024, { markFrac: 0.34, logoFrac: 0.46 });                      // inside the maskable / adaptive safe zone
+const iconFore = await stack(1024, { markFrac: 0.34, logoFrac: 0.46, bg: false });
+
 // web / PWA icons
-await png(tile(1024, 0.80), join(icons, "icon-192.png"), 192);
-await png(tile(1024, 0.80), join(icons, "icon-512.png"), 512);
-await png(tile(1024, 0.58), join(icons, "icon-maskable-512.png"), 512);        // full bleed, mark inside the safe zone
-await png(tile(1024, 0.80), join(icons, "apple-touch-icon.png"), 180);
+await png(iconFull, join(icons, "icon-192.png"), 192);
+await png(iconFull, join(icons, "icon-512.png"), 512);
+await png(iconSafe, join(icons, "icon-maskable-512.png"), 512);        // full bleed, mark inside the safe zone
+await png(iconFull, join(icons, "apple-touch-icon.png"), 180);
 await png(tile(1024, 0.98, { bg: false }), join(icons, "favicon-32.png"), 32);
 
 // square SVG icon (favicon + fallback)
 writeFileSync(join(fe, "icon.svg"), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${TILE[0]}"/><stop offset="1" stop-color="${TILE[1]}"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#tile)"/><g transform="translate(51 51) scale(0.8)">${markBody}</g></svg>\n`);
 
 // native app assets (@capacitor/assets)
-await png(tile(1024, 0.80), join(assets, "icon-only.png"), 1024);
-await png(tile(1024, 0.52, { bg: false }), join(assets, "icon-foreground.png"), 1024);   // Android adaptive foreground
+await png(iconFull, join(assets, "icon-only.png"), 1024);
+await png(iconFore, join(assets, "icon-foreground.png"), 1024);   // Android adaptive foreground
 await sharp({ create: { width: 1024, height: 1024, channels: 3, background: "#e6faf6" } }).png().toFile(join(assets, "icon-background.png"));
 
 // splash screens: the full logo on a plain background

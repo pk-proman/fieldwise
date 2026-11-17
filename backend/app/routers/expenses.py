@@ -9,7 +9,7 @@ from ..notify import notify
 from fastapi.responses import PlainTextResponse
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
-CATEGORIES = ("fuel", "travel", "food", "lodging", "da", "other")
+CATEGORIES = ("fuel", "travel", "taxi", "toll", "parking", "food", "lodging", "da", "other")
 RANK = {"employee": 1, "manager": 2, "admin": 3, "owner": 4}
 
 
@@ -37,7 +37,7 @@ async def create(day: str = Form(...), category: str = Form(...), amount: float 
         raise HTTPException(422, "Expense date cannot be in the future.")
     if category == "fuel":
         auto = ctx.db.scalar(select(ExpenseClaim.id).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == ctx.user.id, ExpenseClaim.day == d, ExpenseClaim.category == "fuel",
-                                                           ExpenseClaim.source == "auto", ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)))
+                                                           ExpenseClaim.source.in_(("auto", "edited")), ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)))
         if auto:
             raise HTTPException(409, "A fuel claim for that day was already created automatically from your route. Ask your manager if it needs correcting.")
     path = None
@@ -165,23 +165,122 @@ def period(start: str | None = None, end: str | None = None, user_id: int | None
         dd = v.started_at.replace(tzinfo=__import__("datetime").timezone.utc).astimezone(tz).date()
         vday.setdefault(dd, []).append({"id": v.id, "customer": cn or (v.prospect or {}).get("name"), "minutes": int(((v.ended_at or v.started_at) - v.started_at).total_seconds() // 60), "done": bool(v.ended_at), "outcome": v.outcome})
     claims: dict = {}
+    items: dict = {}
     for c in ctx.db.scalars(select(ExpenseClaim).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == uid, ExpenseClaim.day >= d1, ExpenseClaim.day <= d2,
-                                                        ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None))):
+                                                        ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)).order_by(ExpenseClaim.id)):
         claims[c.day] = claims.get(c.day, 0) + c.amount
+        items.setdefault(c.day, []).append({"id": c.id, "category": c.category, "amount": c.amount, "description": c.description, "status": c.status, "level": c.level, "source": c.source,
+                                            "distance_km": c.distance_km, "calc_amount": c.calc_amount, "adjust_note": c.adjust_note, "receipt": c.receipt, "erp_ref": c.erp_ref})
     atts = {a.day: a for a in ctx.db.scalars(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == uid, Attendance.day >= d1, Attendance.day <= d2))}
     days, d = [], d1
     while d <= d2:
         rd, vs = rds.get(d), vday.get(d, [])
         if rd or vs or d in claims:
-            calc = routeday.compute_expense(ctx.tenant, user, rd, atts.get(d)) if rd else None
+            calc = routeday.compute_expense(ctx.tenant, user, rd, atts.get(d)) if (rd or atts.get(d)) else None
+            its = items.get(d, [])
+            other = sum(i["amount"] for i in its if i["category"] not in ("fuel", "da"))
             days.append({"day": d.isoformat(), "km": rd.distance_km if rd else 0, "est_km": rd.est_km if rd else 0, "quality": rd.quality if rd else None, "visits": vs,
-                         "calc": calc, "claimed": round(claims.get(d, 0), 2)})
+                         "calc": calc, "claimed": round(claims.get(d, 0), 2), "items": its, "other": round(other, 2)})
         d += timedelta(days=1)
-    mode = routeday.policy_for(ctx.tenant, user)["mode"]
+    pol = routeday.policy_for(ctx.tenant, user)
+    mode = pol["mode"]
     tot = {"km": round(sum(x["km"] for x in days), 1), "est_km": round(sum(x["est_km"] for x in days), 1), "visits": sum(len(x["visits"]) for x in days), "days": len([x for x in days if x["km"] or x["visits"]]),
-           "calculated": round(sum((x["calc"] or {}).get("total", 0) for x in days), 2), "claimed": round(sum(x["claimed"] for x in days), 2)}
+           "calculated": round(sum((x["calc"] or {}).get("total", 0) for x in days), 2), "claimed": round(sum(x["claimed"] for x in days), 2),
+           "other": round(sum(x["other"] for x in days), 2), "unclaimed_days": len([x for x in days if x["calc"] and x["calc"]["total"] > 0 and not any(i["category"] in ("fuel", "da") for i in x["items"])])}
     ctx.db.commit()
-    return {"user": {"id": user.id, "name": user.name}, "start": d1.isoformat(), "end": d2.isoformat(), "mode": mode, "currency": ctx.setting("currency", "INR"), "totals": tot, "days": days}
+    return {"user": {"id": user.id, "name": user.name}, "me": uid == ctx.user.id, "start": d1.isoformat(), "end": d2.isoformat(), "mode": mode, "rate": pol["rate_per_km"], "cap": pol["daily_cap"], "currency": ctx.setting("currency", "INR"), "totals": tot, "days": days}
+
+
+class DayTravelIn(BaseModel):
+    day: date
+    km: float | None = None            # distance to claim; default is the tracked distance
+    amount: float | None = None        # travel amount; default is km x rate (with the rules' cap)
+    allowance: float | None = None     # daily allowance; default is what the rules give
+    reason: str = ""
+
+
+@router.post("/day-travel")
+def day_travel(body: DayTravelIn, ctx: Ctx = Depends(current)):
+    """Claim (or change a still-pending claim for) one day's travel and allowance. Starts from what the rules calculated; anything changed by hand needs a reason."""
+    from .. import routeday
+    d = body.day
+    if d > local_today(ctx.tenant):
+        raise HTTPException(422, "You can't claim for a future date.")
+    for v in (body.km, body.amount, body.allowance):
+        if v is not None and (v < 0 or v > 10_000_000):
+            raise HTTPException(422, "Enter amounts and distances of zero or more.")
+    rd = routeday.build(ctx.db, ctx.tenant, ctx.user.id, d)
+    att = ctx.db.scalar(select(Attendance).where(Attendance.tenant_id == ctx.tid, Attendance.user_id == ctx.user.id, Attendance.day == d, Attendance.deleted_at.is_(None)))
+    calc = routeday.compute_expense(ctx.tenant, ctx.user, rd, att)
+    pol = routeday.policy_for(ctx.tenant, ctx.user)
+    km = calc["km"] if body.km is None else round(body.km, 2)
+    fuel_rule, notes = routeday.fuel_for(pol, km)
+    fuel = round(fuel_rule if body.amount is None else body.amount, 2)
+    allowance = round(calc["allowance"] if body.allowance is None else body.allowance, 2)
+    changed_fuel = abs(fuel - calc["fuel"]) > 0.005 or abs(km - calc["km"]) > 0.005
+    changed_da = abs(allowance - calc["allowance"]) > 0.005
+    reason = body.reason.strip()[:250]
+    if (changed_fuel or changed_da) and len(reason) < 3:
+        raise HTTPException(422, "You changed what the rules calculated. Please say why (a few words).")
+    cur = ctx.setting("currency", "INR")
+    saved = []
+    for cat, amt, rule_amt, changed, text in (("fuel", fuel, calc["fuel"], changed_fuel, f"{km:g} km x {pol['rate_per_km']:g}/km"), ("da", allowance, calc["allowance"], changed_da, f"{calc['allowance_kind'] or 'daily'} allowance")):
+        ex = ctx.db.scalar(select(ExpenseClaim).where(ExpenseClaim.tenant_id == ctx.tid, ExpenseClaim.user_id == ctx.user.id, ExpenseClaim.day == d, ExpenseClaim.category == cat,
+                                                     ExpenseClaim.status != "rejected", ExpenseClaim.deleted_at.is_(None)))
+        desc = (text + (f" · changed: {reason}" if changed else "") + (" · " + "; ".join(notes) if cat == "fuel" and notes and not changed else ""))[:500]
+        if ex is not None:
+            if abs(ex.amount - amt) < 0.005 and (cat != "fuel" or abs((ex.distance_km or 0) - km) < 0.005):
+                continue
+            if ex.status != "pending" or (ex.level or 0) > 0:
+                raise HTTPException(409, f"The {'travel' if cat == 'fuel' else 'allowance'} claim for that day is already {ex.status if ex.status != 'pending' else 'partly approved'} and can't be changed. Ask your manager.")
+            if amt <= 0:
+                ex.deleted_at = utcnow()
+                continue
+            ex.amount, ex.description, ex.levels_required = amt, desc, _levels_for(ctx, amt)
+            ex.distance_km = km if cat == "fuel" else None
+            ex.calc_amount, ex.adjust_note = (rule_amt if changed else None), (reason if changed else "")
+            ex.source = "edited" if changed else ex.source
+            saved.append(ex)
+            continue
+        if amt <= 0:
+            continue
+        e = ExpenseClaim(tenant_id=ctx.tid, user_id=ctx.user.id, day=d, category=cat, amount=amt, currency=cur, description=desc, distance_km=km if cat == "fuel" else None, source="edited" if changed else "auto",
+                         calc_amount=rule_amt if changed else None, adjust_note=reason if changed else "", levels_required=_levels_for(ctx, amt))
+        ctx.db.add(e)
+        saved.append(e)
+    if saved and ctx.user.manager_id:
+        notify(ctx.db, ctx.tid, ctx.user.manager_id, "Expense to approve", f"{ctx.user.name}: {cur} {sum(x.amount for x in saved):g} travel and allowance for {d:%d %b}", "approval")
+    ctx.db.commit()
+    return {"saved": [to_dict(x) for x in saved], "calc": calc}
+
+
+class AdjustIn(BaseModel):
+    amount: float
+    note: str
+
+
+@router.post("/{eid}/adjust")
+def adjust(eid: int, body: AdjustIn, ctx: Ctx = Depends(require("manager"))):
+    """An approver corrects the amount of a pending claim in their reporting line (the employee is told, and the original stays on record)."""
+    e = get_or_404(ctx.db, ExpenseClaim, eid, ctx.tid)
+    if e.user_id == ctx.user.id or e.user_id not in ctx.team_ids():
+        raise HTTPException(403, "You can only adjust claims of people reporting to you.")
+    if e.status != "pending":
+        raise HTTPException(409, "Only claims that are still pending can be adjusted.")
+    if body.amount <= 0 or body.amount > 10_000_000:
+        raise HTTPException(422, "Enter an amount greater than zero.")
+    if len(body.note.strip()) < 3:
+        raise HTTPException(422, "Please say why you changed it.")
+    old = e.amount
+    if e.calc_amount is None:
+        e.calc_amount = old
+    e.amount, e.adjust_note = round(body.amount, 2), f"{ctx.user.name}: {body.note.strip()}"[:300]
+    e.levels_required = max(e.levels_required or 1, _levels_for(ctx, e.amount))
+    if e.source == "auto":
+        e.source = "edited"
+    notify(ctx.db, ctx.tid, e.user_id, "Expense amount changed", f"{e.currency} {old:g} -> {e.amount:g} ({e.category}): {body.note.strip()}", "approval")
+    ctx.db.commit()
+    return to_dict(e)
 
 
 @router.get("/auto-preview")

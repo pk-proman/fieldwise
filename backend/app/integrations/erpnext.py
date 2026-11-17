@@ -21,7 +21,7 @@ from ..models import (Tenant, User, Lead, Customer, Product, Attendance, Expense
 from ..security import hash_password
 
 log = logging.getLogger("fieldwise.erpnext")
-EXPENSE_TYPE_MAP = {"fuel": "Travel", "travel": "Travel", "food": "Food", "lodging": "Travel", "other": "Others"}
+EXPENSE_TYPE_MAP = {"fuel": "Travel", "travel": "Travel", "taxi": "Travel", "toll": "Travel", "parking": "Travel", "food": "Food", "lodging": "Travel", "other": "Others"}
 LEAD_STATUS_OUT = {"new": "Lead", "contacted": "Open", "qualified": "Interested", "proposal": "Quotation", "negotiation": "Quotation", "won": "Converted", "lost": "Do Not Contact"}
 LEAD_STATUS_IN = {"Lead": "new", "Open": "contacted", "Replied": "contacted", "Interested": "qualified", "Opportunity": "qualified",
                   "Quotation": "proposal", "Converted": "won", "Lost Quotation": "lost", "Do Not Contact": "lost"}
